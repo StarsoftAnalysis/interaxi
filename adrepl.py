@@ -113,6 +113,11 @@ class Options:
         for key in keys:
             r += f"'{key}': {self.__dict__[key]}, "
         return r + "}"
+    def write(self, f):
+        keys = list(self.__dict__)
+        keys.sort()
+        for key in keys:
+            f.write(f"{key} = {self.__dict__[key]}")
     def set (self, sourceDict):
         for key, val in sourceDict.items():
             self.__dict__[key] = val
@@ -128,7 +133,7 @@ def printHelp ():
     posup|pen_pos_up <0-100>, ratedown|pen_rate_lower <1-100>, rateup|pen_rate_raise <1-100>,
     delaydown|pen_delay_down <ms>, delayup|pen_delay_up <ms>, delaypage|page_delay <s>, copies <0-9999>,
     random|random_start <y/n>, report|report_time <y/n>, const|const_speed <y/n>, progress <y/n>,
-    preview <y/n>, auto|auto_rotate <y/n>, register, render, position""")
+    preview <y/n>, auto|auto_rotate <y/n>, register, render, position, save [<filename>]""")
 
 cmdList = [
     ("accel", "ac"),
@@ -173,6 +178,7 @@ cmdList = [
     ("register", "rg"),
     ("render", "rn"),
     ("report_time", "rp"),
+    ("save", "sc"),
     ("sethome", "sh"),
     ("speed_pendown", "sd"),
     ("speed_penup", "su"),
@@ -241,6 +247,26 @@ def loadConfig (args, showOutput=True):
         print(f"config file '{configFilename}' loaded")
     if optionsChanged and showOutput:
         print(f"new options: {options}")
+
+# Save the current options.
+# NOTE: some options e.g. 'mode' will just save the last value used,
+# e.g. if last command was 'align', the mode will be save as 'align'.
+# So how useful is this?
+def saveConfig (args):
+    if len(args) == 0:
+        filename = defaultConfigFilename()
+    else:
+        filename = args[0]
+    try:
+        with open(filename, 'w') as f:
+            print(f"Saving configuration to {filename!r}")
+            keys = list(options.__dict__)
+            keys.sort()
+            for key in keys:
+                #print(f"{key} = {options.__dict__[key]!r}")
+                f.write(f"{key} = {options.__dict__[key]!r}\n")
+    except PermissionError as err:
+        print("Unable to save configuration:", err)
 
 def handleSigint (*args):
     print("done (Ctrl-C pressed)")
@@ -657,6 +683,8 @@ while True:
         showPos()
     elif shortCmd == "sh":
         setHome()
+    elif shortCmd == "sc":
+        saveConfig(args)
 
     else:
         print(f"Don't understand '{line}'")
