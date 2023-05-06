@@ -211,28 +211,12 @@ def miniMatch (cmd):
     print(f"Command '{cmd}' is ambiguous -- it could match any of {matched}")
     return None
 
-# Capture output from a function call
-# From https://stackoverflow.com/questions/16571150/how-to-capture-stdout-output-from-a-python-function-call
-#class Capturing(list):
-#    def __enter__(self):
-#        self._stdout = sys.stdout
-#        sys.stdout = self._stringio = StringIO()
-#        return self
-#    def __exit__(self, *args):
-#        self.extend(self._stringio.getvalue().splitlines())
-#        del self._stringio    # free up some memory
-#        sys.stdout = self._stdout
-
 def defaultConfigFilename ():
     return os.path.expanduser(os.path.join(configDir + "axidraw_conf.py"))
 
 def loadDefaultConfig ():
     fileName = defaultConfigFilename()
     loadConfig([fileName], True)
-    #try:
-    #    open..
-    #except FileNotFoundError:
-    #    no worries
 
 # Code for loading configuration file(s) provided by Windell Oskay, 22 April 2023.
 # Adapted to work here.
@@ -246,30 +230,12 @@ def loadConfig (args, showOutput=True):
     optionsChanged = False
     for filename in args:
         configFilename = os.path.expanduser(filename)
-        # or like this: 
-        #  f = io.StringIO() 
-        #  with redirect_stdout(f):
-        #      help(pow) 
-        #  s = f.getvalue()
-        # from https://stackoverflow.com/questions/16571150/how-to-capture-stdout-output-from-a-python-function-call
-        #with Capturing() as output:
-        #f = io.StringIO()   
-        #ferr = io.StringIO()   
-        # Capture output from library function:
-        #with contextlib.redirect_stderr(ferr): # needs python 3.5
-            #with contextlib.redirect_stdout(f): # needs python 3.4
         try:
             config_dict = acutils.load_config(configFilename)
-            print("loaded OK")
+            #print("loaded OK")
         except SystemExit as err:
-            #if showOutput:
-            print("SE error:", err, "done")
+            #print("SE error:", err, "done")
             continue
-        except:
-            print("other error")
-        #if showOutput:
-        #print("f", f.getvalue(), " donef")
-        #print("ferr", ferr.getvalue(), " doneferr")
         options.set(config_dict)
         optionsChanged = True
         print(f"config file '{configFilename}' loaded")
