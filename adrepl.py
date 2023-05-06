@@ -25,7 +25,6 @@
 # * loop to print many copies
 # * history - save and restore; complete filenames
 # * resolution, reordering options
-# * display current options in alpha order
 # * maybe: check ad.errors.code at end of REPL (after every command)
 # * cmd to draw a reg mark
 # * pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
@@ -36,13 +35,19 @@
 
 import atexit
 import os
-import readline # for user input history etc.
 import signal
 import sys
 import io
 #from contextlib import redirect_stderr
 import contextlib
 #from io import StringIO 
+import os.path
+# Use readline if available:
+try:
+    import readline
+except ImportError:
+    readline = None
+
 
 from curtsies  import Input
 from pyaxidraw import axidraw
@@ -56,6 +61,11 @@ alignY = None
 
 # 'Constants'
 configDir = "~/.config/adrepl/"
+configFile = "axidraw_conf.py"
+defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
+histFile = "history.txt"
+defaultHistFile = os.path.expanduser(os.path.join(configDir, histFile))
+histFileSize = 1000
 minX = 0.0
 minY = 0.0
 # max values depend on model -- these numbers from standard axidraw_conf.py:
@@ -257,12 +267,8 @@ def miniMatch (cmd):
     print(f"Command '{cmd}' is ambiguous -- it could match any of {matched}")
     return None
 
-def defaultConfigFilename ():
-    return os.path.expanduser(os.path.join(configDir + "axidraw_conf.py"))
-
 def loadDefaultConfig ():
-    fileName = defaultConfigFilename()
-    loadConfig([fileName], True)
+    loadConfig([defaultConfigFile], True)
 
 # Code for loading configuration file(s) provided by Windell Oskay, 22 April 2023.
 # Adapted to work here.
@@ -294,7 +300,7 @@ def loadConfig (args, showOutput=True):
 # So how useful is this?
 def saveConfig (args):
     if len(args) == 0:
-        filename = defaultConfigFilename()
+        filename = defaultConfigFile
     else:
         filename = args[0]
     try:
@@ -610,6 +616,15 @@ def align ():
         alignY = None
         print("WARNING: head position is unknown -- be careful when using walkx/y or reg")
 
+def loadHistory ():
+    if readline and os.path.exists(defaultHistFile):
+        readline.read_history_file(defaultHistFile)
+
+def saveHistory ():
+    if readline:
+        readline.set_history_length(histFileSize)
+        readline.write_history_file(defaultHistFile)
+
 ##########################################################################################
 
 signal.signal(signal.SIGINT, handleSigint)
@@ -626,6 +641,9 @@ loadDefaultConfig()   # FIXME only if nothing on command line
 loadConfig(sys.argv[1:])
 
 align()
+
+loadHistory()
+atexit.register(saveHistory)
 
 # REPL
 while True:
