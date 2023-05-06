@@ -23,8 +23,6 @@
 #   - simplify model
 # * interactive mode for some things??
 # * loop to print many copies
-# * at start, load default config from ~/.config/adrepl/config.py and/or current dir etc.
-# * save config
 # * history - save and restore; complete filenames
 # * resolution, reordering options
 # * display current options in alpha order
@@ -32,6 +30,9 @@
 # * cmd to draw a reg mark
 # * pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
 #   derive its name from .svg filename to allow auto resume
+# * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
+#   - otherwise saved config will become a meaningless jumble.
+# * trap Ctrl-D in REPL
 
 import atexit
 import os
@@ -126,14 +127,48 @@ options = Options()
 ##############################################################
 
 def printHelp ():
-    print("""Available commands: help, quit, cycle, align, version, sysinfo, toggle, units <mm>|<inches>,
-    x|walkx <distance>, y|walky <distance>, fw_version, up|raise_pen, down|lower_pen, home|walk_home,
-    on|enable_xy, off|disable_xy, plot <filename> [<layer>], options|config [<filename>], model [<num>],
-    speeddown|speed_pendown <1-100>, speedup|speed_penup <1-100>, accel, posdown|pen_pos_down <0-100>,
-    posup|pen_pos_up <0-100>, ratedown|pen_rate_lower <1-100>, rateup|pen_rate_raise <1-100>,
-    delaydown|pen_delay_down <ms>, delayup|pen_delay_up <ms>, delaypage|page_delay <s>, copies <0-9999>,
-    random|random_start <y/n>, report|report_time <y/n>, const|const_speed <y/n>, progress <y/n>,
-    preview <y/n>, auto|auto_rotate <y/n>, register, render, position, save [<filename>]""")
+    print("""Available commands: 
+accel, \
+align, \
+auto_rotate <y/n>, \
+const_speed <y/n>, \
+copies <0-9999>, \
+cycle, \
+delaydown|pen_delay_down <ms>, \
+delaypage|page_delay <s>, \
+delayup|pen_delay_up <ms>, \
+down|lower_pen, \
+fw_version, \
+help, \
+home|walk_home, \
+model [<num>], \
+off|disable_xy, \
+on|enable_xy, \
+options|config [<filename>], \
+plot <filename> [<layer>], \
+posdown|pen_pos_down <0-100>, \
+position, \
+posup|pen_pos_up <0-100>, \
+preview <y/n>, \
+quit, \
+random_start <y/n>, \
+ratedown|pen_rate_lower <1-100>, \
+rateup|pen_rate_raise <1-100>, \
+register, \
+render, \
+report_time <y/n>, \
+save [<filename>], \
+speeddown|speed_pendown <1-100>, \
+speedup|speed_penup <1-100>, \
+sysinfo, \
+toggle, \
+units <mm>|<inches>, \
+up|raise_pen, \
+version, \
+walkx|x <distance>, \
+walky|y <distance> \
+""")
+    print("Commands can be abbreviated as long as what you type is unambiguous.")
 
 cmdList = [
     ("accel", "ac"),
