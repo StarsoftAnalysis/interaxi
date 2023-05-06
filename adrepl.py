@@ -33,6 +33,7 @@
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
 #   - otherwise saved config will become a meaningless jumble.
 # * trap Ctrl-D in REPL
+# * change/set current directory; list plottable files in current directory.
 
 import atexit
 import os
@@ -206,7 +207,6 @@ cmdList = [
     ("preview", "pv"),
     ("quit", "qu"),
     ("raise_pen", "up"),
-    ("random", "rn"),
     ("random_start", "rn"),
     ("ratedown", "rd"),
     ("rateup", "ru"),
@@ -229,6 +229,7 @@ cmdList = [
     ("walky", "wy"),
     ("x", "wx"),
     ("y", "wy"),
+    ("walk", "wh"),
 ]
 
 # Match the abbreviated command against the list,
@@ -240,6 +241,11 @@ def miniMatch (cmd):
     matched = []
     short = None
     for pair in cmdList:
+        # Full match succeeds immediately
+        # (otherwise would fail if both 'foo' and 'foo_bar' are valid)
+        if cmd == pair[0]:
+            return pair[1]
+        # Else try to match as abbreviation
         if pair[0].startswith(cmd):
             matched.append(pair[0])
             short = pair[1]
@@ -382,7 +388,7 @@ def get1Float (args):
 
 def getDist (args):
     if len(args) != 1:
-        return None, "need a distance"
+        return None, f"need a distance ({currentUnits})"
     d, err = getFloat(args[0])
     if err:
         return None, err
@@ -599,6 +605,7 @@ def align ():
     if aligned:
         alignX = 0.0
         alignY = 0.0
+        setHome()
     else:
         alignX = None
         alignY = None
@@ -655,17 +662,17 @@ while True:
         walk("x", args)
     elif shortCmd == "wy":
         walk("y", args)
+    elif shortCmd == "wh":
+        manual("walk_home")
+        if aligned:
+            alignX = 0.0
+            alignY = 0.0
     elif shortCmd == "fw":
         manual("fw_version")
     elif shortCmd == "up":
         manual("raise_pen")
     elif shortCmd == "do":
         manual("lower_pen")
-    elif shortCmd == "ho":
-        manual("walk_home")
-        if aligned:
-            alignX = 0.0
-            alignY = 0.0
     elif shortCmd == "on":
         manual("enable_xy")
         print("motors are on")
@@ -722,7 +729,7 @@ while True:
         saveConfig(args)
 
     else:
-        print(f"Don't understand '{line}'")
+        print(f"Command '{cmd}' is not known.  Try 'help'")
 
 
 # end of REPL loop
