@@ -28,7 +28,7 @@
 # * history - save and restore; complete filenames
 # * resolution, reordering options
 # * display current options in alpha order
-# * maybe: check add.errors.code at end of REPL (after every command)
+# * maybe: check ad.errors.code at end of REPL (after every command)
 # * cmd to draw a reg mark
 # * pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
 #   derive its name from .svg filename to allow auto resume
@@ -38,6 +38,10 @@ import os
 import readline # for user input history etc.
 import signal
 import sys
+import io
+#from contextlib import redirect_stderr
+import contextlib
+#from io import StringIO 
 
 from curtsies  import Input
 from pyaxidraw import axidraw
@@ -50,6 +54,7 @@ alignX = None       # Head position if aligned in inches.
 alignY = None
 
 # 'Constants'
+configDir = "~/.config/adrepl/"
 minX = 0.0
 minY = 0.0
 # max values depend on model -- these numbers from standard axidraw_conf.py:
@@ -206,10 +211,34 @@ def miniMatch (cmd):
     print(f"Command '{cmd}' is ambiguous -- it could match any of {matched}")
     return None
 
+# Capture output from a function call
+# From https://stackoverflow.com/questions/16571150/how-to-capture-stdout-output-from-a-python-function-call
+#class Capturing(list):
+#    def __enter__(self):
+#        self._stdout = sys.stdout
+#        sys.stdout = self._stringio = StringIO()
+#        return self
+#    def __exit__(self, *args):
+#        self.extend(self._stringio.getvalue().splitlines())
+#        del self._stringio    # free up some memory
+#        sys.stdout = self._stdout
+
+def defaultConfigFilename ():
+    return os.path.expanduser(os.path.join(configDir + "axidraw_conf.py"))
+
+def loadDefaultConfig ():
+    fileName = defaultConfigFilename()
+    loadConfig([fileName], True)
+    #try:
+    #    open..
+    #except FileNotFoundError:
+    #    no worries
+
 # Code for loading configuration file(s) provided by Windell Oskay, 22 April 2023.
 # Adapted to work here.
 # Options and parameters set before this point WILL BE IGNORED.
-def loadConfig (args):
+def loadConfig (args, showOutput=True):
+    print(f"loadConfig: {args=} {showOutput=}")
     if len(args) == 0:
         # just print the current config
         print("options:", options)
@@ -217,15 +246,34 @@ def loadConfig (args):
     optionsChanged = False
     for filename in args:
         configFilename = os.path.expanduser(filename)
+        # or like this: 
+        #  f = io.StringIO() 
+        #  with redirect_stdout(f):
+        #      help(pow) 
+        #  s = f.getvalue()
+        # from https://stackoverflow.com/questions/16571150/how-to-capture-stdout-output-from-a-python-function-call
+        #with Capturing() as output:
+        #f = io.StringIO()   
+        #ferr = io.StringIO()   
+        # Capture output from library function:
+        #with contextlib.redirect_stderr(ferr): # needs python 3.5
+            #with contextlib.redirect_stdout(f): # needs python 3.4
         try:
             config_dict = acutils.load_config(configFilename)
+            print("loaded OK")
         except SystemExit as err:
-            # (load_config() will have already printed an error message)
+            #if showOutput:
+            print("SE error:", err, "done")
             continue
+        except:
+            print("other error")
+        #if showOutput:
+        #print("f", f.getvalue(), " donef")
+        #print("ferr", ferr.getvalue(), " doneferr")
         options.set(config_dict)
         optionsChanged = True
         print(f"config file '{configFilename}' loaded")
-    if optionsChanged:
+    if optionsChanged and showOutput:
         print(f"new options: {options}")
 
 def handleSigint (*args):
@@ -539,6 +587,8 @@ ad.plot_setup()                 # Go into plot mode and create ad.options
 # Copy initial ad.options into local options
 options.set(ad.options.__dict__)
 
+# Load default config file
+loadDefaultConfig()   # FIXME only if nothing on command line
 # Load config file(s) supplied on command line
 loadConfig(sys.argv[1:])
 
