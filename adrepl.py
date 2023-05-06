@@ -32,7 +32,6 @@
 #   derive its name from .svg filename to allow auto resume
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
 #   - otherwise saved config will become a meaningless jumble.
-# * trap Ctrl-D in REPL
 # * change/set current directory; list plottable files in current directory.
 
 import atexit
@@ -630,7 +629,12 @@ align()
 
 # REPL
 while True:
-    line = input("> ")  # .decode('utf-8').strip()
+    try:
+        line = input("> ")  # .decode('utf-8').strip()
+    except EOFError:
+        # Ctrl-D pressed
+        print("done (Ctrl-D pressed)")
+        break
     cmd, args = parse(line)
     shortCmd = miniMatch(cmd)
     if shortCmd == None:
