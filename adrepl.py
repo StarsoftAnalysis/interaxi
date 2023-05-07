@@ -37,17 +37,11 @@ import atexit
 import os
 import signal
 import sys
-import io
-#from contextlib import redirect_stderr
-import contextlib
-#from io import StringIO 
-import os.path
 # Use readline if available:
 try:
     import readline
 except ImportError:
     readline = None
-
 
 from curtsies  import Input
 from pyaxidraw import axidraw
@@ -66,6 +60,7 @@ defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
 histFile = "history.txt"
 defaultHistFile = os.path.expanduser(os.path.join(configDir, histFile))
 histFileSize = 1000
+origDir = os.getcwd()
 minX = 0.0
 minY = 0.0
 # max values depend on model -- these numbers from standard axidraw_conf.py:
@@ -141,6 +136,7 @@ def printHelp ():
 accel, \
 align, \
 auto_rotate <y/n>, \
+cd, \
 const_speed <y/n>, \
 copies <0-9999>, \
 cycle, \
@@ -151,6 +147,7 @@ down|lower_pen, \
 fw_version, \
 help, \
 home|walk_home, \
+ls, \
 model [<num>], \
 off|disable_xy, \
 on|enable_xy, \
@@ -184,6 +181,7 @@ cmdList = [
     ("accel", "ac"),
     ("align", "al"),
     ("auto_rotate", "au"),
+    ("cd", "cd"),
     ("config", "op"),
     ("const_speed", "cs"),
     ("copies", "cp"),
@@ -198,6 +196,7 @@ cmdList = [
     ("help", "he"),
     ("home", "ho"),
     ("lower_pen", "do"),
+    ("ls", "ls"),
     ("model", "mo"),
     ("off", "of"),
     ("on", "on"),
@@ -625,6 +624,32 @@ def saveHistory ():
         readline.set_history_length(histFileSize)
         readline.write_history_file(defaultHistFile)
 
+def cd (args):
+    if len(args) > 0:
+        try:
+            os.chdir(os.path.expanduser(args[0]))
+        except (FileNotFoundError) as err:
+            print("Can't change to that directory:", err)
+    print(os.getcwd())
+
+def ls ():
+    with os.scandir() as entries:
+        count = 0
+        for entry in entries:
+            if entry.name.startswith('.'):
+                continue
+            if entry.is_file() and entry.name.lower().endswith(".svg"):
+                print(entry.name)
+                count += 1
+            if entry.is_dir():
+                print(entry.name + '/')
+                count += 1
+        if count == 0:
+            print("No usable entries in current directory")
+
+def restoreCWD ():
+    os.chdir(origDir)
+
 ##########################################################################################
 
 signal.signal(signal.SIGINT, handleSigint)
@@ -644,6 +669,7 @@ align()
 
 loadHistory()
 atexit.register(saveHistory)
+atexit.register(restoreCWD)
 
 # REPL
 while True:
@@ -749,6 +775,10 @@ while True:
         setHome()
     elif shortCmd == "sc":
         saveConfig(args)
+    elif shortCmd == "cd":
+        cd(args)
+    elif shortCmd == "ls":
+        ls()
 
     else:
         print(f"Command '{cmd}' is not known.  Try 'help'")
