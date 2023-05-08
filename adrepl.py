@@ -136,7 +136,7 @@ def printHelp ():
 accel, \
 align, \
 auto_rotate <y/n>, \
-cd, \
+cd <directory>, \
 const_speed <y/n>, \
 copies <0-9999>, \
 cycle, \
