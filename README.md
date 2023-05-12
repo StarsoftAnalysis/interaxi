@@ -86,8 +86,19 @@ Set the speed that the pen moves down as a percentage of the maximum.
 Set the speed that the pen moves up as a percentage of the maximum.
 ### `register`
 Start pen registration -- see below.
-### `render`
-Not implemented.
+### `render <0-3>`
+    0 - Do not render previews
+    1 - Render pen-down movement only
+    2 - Render pen-up movement only
+    3 - Render all movement, both pen-up and pen-down [DEFAULT]
+The render option changes the content of the output SVG file, so it has no effect
+unless an output file name has been specified.
+### `reordering <0-4>`
+    0 - Least; Only connect adjoining paths. [DEFAULT]
+    1 - Basic; Also reorder paths for speed
+    2 - Full; Also allow path reversal
+    3 - [Deprecated; currently gives same behavior as 2.]
+    4 - None; Strictly preserve file order
 ### `report_time <y/n>`
 Turn plot reporting on or off.
 ### `save [<filename>]`

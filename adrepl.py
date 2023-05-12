@@ -13,17 +13,17 @@
 #   object, and apply them all before each plot_run (or after plot_setup).
 # * developed and tested on Raspberry Pi (orig B+) running Raspbian bullseye.
 # * requirements:
-#   - python3
+#   - python3.5
 #   - modules as below
-# * All distances are handled in inches, convert to and from millimetres
+# * All distances are handled in inches, converting to and from millimetres
 #   for display and input if required.
 
 # TODO
 # * make sure all options report just their current value if no args
 #   - simplify model
 # * interactive mode for some things??
-# * loop to print many copies
-# * history - save and restore; complete filenames
+# * loop to print many copies -- rather than built-in copy thing.
+# * complete filenames
 # * resolution, reordering options
 # * maybe: check ad.errors.code at end of REPL (after every command)
 # * cmd to draw a reg mark
@@ -32,6 +32,7 @@
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
 #   - otherwise saved config will become a meaningless jumble.
 # * change/set current directory; list plottable files in current directory.
+# * turn motors off after a delay (or does the firmware do that?)
 
 import atexit
 import os
@@ -163,6 +164,7 @@ ratedown|pen_rate_lower <1-100>, \
 rateup|pen_rate_raise <1-100>, \
 register, \
 render, \
+reordering <0-4>, \
 report_time <y/n>, \
 save [<filename>], \
 speeddown|speed_pendown <1-100>, \
@@ -206,20 +208,21 @@ cmdList = [
     ("pen_delay_up", "du"),
     ("pen_pos_down", "pd"),
     ("pen_pos_up", "pu"),
-    ("pen_rate_lower", "rd"),
-    ("pen_rate_raise", "ru"),
-    ("plot", "pl"),
+    ("pen_rate_lower", "pl"),
+    ("pen_rate_raise", "pr"),
+    ("plot", "pt"),
     ("posdown", "pd"),
     ("position", "po"),
     ("posup", "pu"),
     ("preview", "pv"),
     ("quit", "qu"),
     ("raise_pen", "up"),
-    ("random_start", "rn"),
-    ("ratedown", "rd"),
-    ("rateup", "ru"),
+    ("random_start", "rd"),
+    ("ratedown", "pl"),
+    ("rateup", "pr"),
     ("register", "rg"),
     ("render", "rn"),
+    ("reordering", "ro"),
     ("report_time", "rp"),
     ("save", "sc"),
     ("sethome", "sh"),
@@ -727,7 +730,7 @@ while True:
     elif shortCmd == "of":
         manual("disable_xy")
         print("motors are off")
-    elif shortCmd == "pl":
+    elif shortCmd == "pt":
         plotFile(args)
     elif shortCmd == "op":
         loadConfig(args)
@@ -743,9 +746,9 @@ while True:
         options.pen_pos_down = getRange("posdown", 0, 100, options.pen_pos_down, args)
     elif shortCmd == "pu":
         options.pen_pos_up = getRange("posup", 0, 100, options.pen_pos_up, args)
-    elif shortCmd == "rd":
+    elif shortCmd == "pl":
         options.pen_rate_lower = getRange("ratedown", 1, 100, options.pen_rate_lower, args)
-    elif shortCmd == "ru":
+    elif shortCmd == "pr":
         options.pen_rate_raise = getRange("rateup", 1, 100, options.pen_rate_raise, args)
     elif shortCmd == "dd":
         options.pen_delay_down = getRange("delaydown", 0, 10000, options.pen_delay_down, args)
@@ -753,9 +756,13 @@ while True:
         options.pen_delay_up = getRange("delayup", 0, 10000, options.pen_delay_up, args)
     elif shortCmd == "dp":
         options.page_delay = getRange("pagedelay", 0, 10000, options.pagedelay, args)
+    elif shortCmd == "rn":
+        options.render = getRange("render", 0, 3, options.render, args)
+    elif shortCmd == "ro":
+        options.reordering = getRange("reordering", 0, 4, options.reordering, args)
     elif shortCmd == "cp":
         options.copies = getRange("copies", 0, 9999, options.copies, args)
-    elif shortCmd == "rn":
+    elif shortCmd == "rd":
         options.random_start = getBool("random", options.random_start, args)
     elif shortCmd == "rp":
         options.report_time = getBool("report", options.report_time, args)
@@ -767,8 +774,6 @@ while True:
         options.auto_rotate = getBool("auto", options.auto_rotate, args)
     elif shortCmd == "rg":
         registerXY()
-    elif shortCmd == "rn":
-        print("render: not implemented")
     elif shortCmd == "po":
         showPos()
     elif shortCmd == "sh":
