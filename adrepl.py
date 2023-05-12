@@ -19,6 +19,7 @@
 #   for display and input if required.
 
 # TODO
+# * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 # * make sure all options report just their current value if no args
 #   - simplify model
 # * interactive mode for some things??
@@ -33,6 +34,7 @@
 #   - otherwise saved config will become a meaningless jumble.
 # * change/set current directory; list plottable files in current directory.
 # * turn motors off after a delay (or does the firmware do that?)
+# * allow entered filenames to have spaces -- i.e. join the args
 
 import atexit
 import os
@@ -53,6 +55,7 @@ currentUnits = "mm"
 aligned = False     # True if we know where the head is.
 alignX = None       # Head position if aligned in inches.
 alignY = None
+outputFilename = 'none'
 
 # 'Constants'
 configDir = "~/.config/adrepl/"
@@ -153,6 +156,7 @@ model [<num>], \
 off|disable_xy, \
 on|enable_xy, \
 options|config [<filename>], \
+output [<filename>],
 plot <filename> [<layer>], \
 posdown|pen_pos_down <0-100>, \
 position, \
@@ -163,7 +167,7 @@ random_start <y/n>, \
 ratedown|pen_rate_lower <1-100>, \
 rateup|pen_rate_raise <1-100>, \
 register, \
-render, \
+rendering <0-3>, \
 reordering <0-4>, \
 report_time <y/n>, \
 save [<filename>], \
@@ -203,6 +207,7 @@ cmdList = [
     ("off", "of"),
     ("on", "on"),
     ("options", "op"),
+    ("output", "ou"),
     ("page_delay", "dp"),
     ("pen_delay_down", "dd"),
     ("pen_delay_up", "du"),
@@ -221,7 +226,7 @@ cmdList = [
     ("ratedown", "pl"),
     ("rateup", "pr"),
     ("register", "rg"),
-    ("render", "rn"),
+    ("rendering", "rn"),
     ("reordering", "ro"),
     ("report_time", "rp"),
     ("save", "sc"),
@@ -261,6 +266,7 @@ def miniMatch (cmd):
             matched.append(pair[0])
             short = pair[1]
     n = len(matched)
+    #print(f"{matched=}")
     if n == 0:
         print(f"Command '{cmd}' is not known.  Try 'help'")
         return None
@@ -296,6 +302,19 @@ def loadConfig (args, showOutput=True):
     if optionsChanged and showOutput:
         print(f"new options: {options}")
 
+def setOutputFilename (args):
+    global outputFilename
+    if len(args) == 0:
+        print(outputFilename)
+        return
+    outputFilename = args[0]
+    if outputFilename == 'none':
+        print("Plot output will not be saved")
+    elif outputFilename == 'auto':
+        print("Plot output file name will be chosen automatically")
+    else:
+        print(f"Plot output will be saved as '{outputFilename}'")
+
 # Save the current options.
 # NOTE: some options e.g. 'mode' will just save the last value used,
 # e.g. if last command was 'align', the mode will be save as 'align'.
@@ -321,11 +340,27 @@ def handleSigint (*args):
     quit()
 
 # Apply local options, and then call plot_run()
-def plotRun ():
+def plotRun (inputFilename=None):
     for key, value in options.__dict__.items():
         ad.options.__dict__[key] = value
     #print(f"Running with options {options}")
-    ad.plot_run()
+    print(f"{inputFilename=}  {outputFilename=}")
+    if inputFilename and outputFilename != 'none':
+        # Send plot output to a file
+        if outputFilename == 'auto':
+            ofn = inputFilename + '.svg'   # FIXME
+        else:
+            ofn = outputFilename
+        print(f"{inputFilename=}  {outputFilename=}  {ofn=}")
+        try:
+            with open(ofn, "w") as outputFile:
+                outputFile.write(ad.plot_run(True))
+        except PermissionError as err:
+            print(f"Unable to create output file {ofn}: {err}")
+            return
+    else:
+        # Not using plot output
+        ad.plot_run()
 
 def parse (line):
     tokens = line.split()
@@ -554,8 +589,8 @@ def plotFile (args):
             options.mode = "plot"
             print(f"plotting file '{filename}'")
         options.layer = layer    # even if it's None
-        ad.plot_setup(filename)
-        plotRun()   # This re-applies local options to ad.options
+        ad.plot_setup(filename) # This changes ad.options
+        plotRun(filename)   # This re-applies local options to ad.options
         if ad.errors.code == 0:
             # The report will already have been printed,
             # but these values are now available to use:
@@ -734,6 +769,8 @@ while True:
         plotFile(args)
     elif shortCmd == "op":
         loadConfig(args)
+    elif shortCmd == "ou":
+        setOutputFilename(args)
     elif shortCmd == "mo":
         setModel(args)
     elif shortCmd == "sd":
@@ -757,7 +794,7 @@ while True:
     elif shortCmd == "dp":
         options.page_delay = getRange("pagedelay", 0, 10000, options.pagedelay, args)
     elif shortCmd == "rn":
-        options.render = getRange("render", 0, 3, options.render, args)
+        options.rendering = getRange("rendering", 0, 3, options.rendering, args)
     elif shortCmd == "ro":
         options.reordering = getRange("reordering", 0, 4, options.reordering, args)
     elif shortCmd == "cp":

@@ -121,6 +121,24 @@ Display the software version.
 ### `walkx|x <distance>`
 ### `walky|y <distance>`
 
+## Registering
+
+The `register` command starts interactive control of the pen position.  Use the arrow keys to move the head by small amounts
+to help with registering layers (i.e. plots with different pens) onto each other.  
+
+While registering, use these keys:
+
+    <up arrow> - move the pen in the negative Y direction
+    <down arrow> - move the pen in the positive Y direction
+    <left arrow> - move the pen in the negative X direction
+    <right arrow> - move the pen in the positive X direction
+    u - raise the pen
+    d - lower the pen
+    f - fine movements (0.1mm or 0.005in)
+    m - fine movements (1mm or 0.05in)
+    c - fine movements (10mm or 0.5in)
+    q - quit -- complete the registration
+
 ## Requirements
 
 * Python 3.5 or later
