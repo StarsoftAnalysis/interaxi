@@ -146,6 +146,7 @@ While registering, use these keys:
     f - fine movements (0.1mm or 0.005in)
     m - fine movements (1mm or 0.05in)
     c - fine movements (10mm or 0.5in)
+    r - return to the home position
     q - quit -- complete the registration
 
 ## Requirements

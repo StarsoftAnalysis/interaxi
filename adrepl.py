@@ -489,6 +489,9 @@ def registerXY():
             elif e in ('d', 'D'):
                 manual("lower_pen")
                 showMove("d")
+            elif e in ('r', 'R'):
+                walkHome()
+                showMove("r")
     printMsg("done registering")
     reply = input("Set home? y/n: ")
     if getBool("sethome", False, [reply]):
@@ -561,6 +564,12 @@ def walk (xy, args):
     options.dist = dist
     plotRun()
     #print(f"NOT RUNNING -- would have walked {dist} {xy}")
+
+def walkHome ():
+    manual("walk_home")
+    if aligned:
+        alignX = 0.0
+        alignY = 0.0
 
 def showPos ():
     if aligned: 
@@ -762,10 +771,7 @@ while True:
     elif shortCmd == "wy":
         walk("y", args)
     elif shortCmd == "wh":
-        manual("walk_home")
-        if aligned:
-            alignX = 0.0
-            alignY = 0.0
+        walkHome()
     elif shortCmd == "fw":
         manual("fw_version")
     elif shortCmd == "up":
