@@ -66,6 +66,12 @@ Turn the x/y stepper motors on.
 ### `options|config [<filename>]`
 Load the options (aka configuration) from the AxiDraw configuration file specified.  If no filename is given,
 display the current options.
+### `output <filename>`
+The plot (or preview) command will create an output file if you specify a file name.
+    none - do not create an output file
+    auto - generate the output file name automatically (currently by adding '.svg' to the input file name).
+    <filename> - use the given file name.
+WARNING: If the specified file already exists, it will be overwritten.
 ### `plot <filename> [<layer>]`
 Run the plot from the given filename.  If a layer number (1-1000) is given, plot only that layer.
 ### `posdown|pen_pos_down <0-100>`
@@ -74,8 +80,9 @@ Set the down position of the pen (as a percentage of the total travel of the ser
 Display the current head position (if known).
 ### `posup|pen_pos_up <0-100>`
 Set the up position of the pen (as a percentage of the total travel of the servo).
-### `preview <y/n>`
-Turn on previewing -- no plotting will be done until this option is turned off again.
+### `preview <filename> [<layer>]`
+Run the plot in preview mode -- the pen will not move, but the estimated time will be reported.
+This will also create an output file if you have set an output file name.
 ### `quit` | `Ctrl-C` | `Ctrl-D`
 Leave `adrepl`.  The current configuration will not be saved automatically.
 ### `random_start <y/n>`
@@ -87,6 +94,8 @@ Set the speed that the pen moves up as a percentage of the maximum.
 ### `register`
 Start pen registration -- see below.
 ### `render <0-3>`
+When previewing with an output filename set, a preview of what would have been plotted
+can be created.
     0 - Do not render previews
     1 - Render pen-down movement only
     2 - Render pen-up movement only
@@ -142,4 +151,9 @@ While registering, use these keys:
 ## Requirements
 
 * Python 3.5 or later
-...
+
+## Issues
+
+* It needs a better name.
+* The documentation is incomplete.
+* Lots of others, probably.

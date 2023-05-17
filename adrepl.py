@@ -20,6 +20,7 @@
 
 # TODO
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
+#    -- so, make preview an alternative command to plot.
 # * make sure all options report just their current value if no args
 #   - simplify model
 # * interactive mode for some things??
@@ -156,12 +157,12 @@ model [<num>], \
 off|disable_xy, \
 on|enable_xy, \
 options|config [<filename>], \
-output [<filename>],
+output [<filename>], \
 plot <filename> [<layer>], \
 posdown|pen_pos_down <0-100>, \
 position, \
 posup|pen_pos_up <0-100>, \
-preview <y/n>, \
+preview <filename> [<layer>], \
 quit, \
 random_start <y/n>, \
 ratedown|pen_rate_lower <1-100>, \
@@ -344,7 +345,7 @@ def plotRun (inputFilename=None):
     for key, value in options.__dict__.items():
         ad.options.__dict__[key] = value
     #print(f"Running with options {options}")
-    print(f"{inputFilename=}  {outputFilename=}")
+    #print(f"{inputFilename=}  {outputFilename=}")
     if inputFilename and outputFilename != 'none':
         # Send plot output to a file
         if outputFilename == 'auto':
@@ -569,17 +570,17 @@ def showPos ():
     else:
         print("Head position is unknown.  Use 'align' to manually move head to 0,0.")
 
-def plotFile (args):
+def plotFile (args, preview=False):
+    cmdName = "preview" if preview else "plot"
     if len(args) == 0 or len(args) > 2:
-        print("plot: need one filename (and optional layer prefix)")
+        print(f"{cmdName}: need one filename (and optional layer prefix)")
         return
     filename = os.path.expanduser(args[0].strip(" \"'\t\r\n"))
-
     layer = None
     if len(args) == 2:
         layer, err = getInt(args[1])
         if err or layer < 0 or layer > 1000:
-            print("plot: layer must be a whole number between 0 and 1000", err)
+            print(f"{cmdName}: layer must be a whole number between 0 and 1000", err)
             return
     try:
         if layer:
@@ -590,18 +591,26 @@ def plotFile (args):
             print(f"plotting file '{filename}'")
         options.layer = layer    # even if it's None
         ad.plot_setup(filename) # This changes ad.options
+        oldRT = options.report_time
+        if preview:
+            options.preview = True
+            options.report_time = True
         plotRun(filename)   # This re-applies local options to ad.options
         if ad.errors.code == 0:
-            # The report will already have been printed,
-            # but these values are now available to use:
-            if ad.options.report_time: 
-                time_elapsed = ad.time_elapsed
-                time_estimate = ad.time_estimate 
-                dist_pen_down = ad.distance_pendown
-                dist_pen_total = ad.distance_total
-                pen_lifts = ad.pen_lifts
+            ## The report will already have been printed,
+            ## but these values are now available to use:
+            #if oldRT: 
+            #    time_elapsed = ad.time_elapsed
+            #    time_estimate = ad.time_estimate 
+            #    dist_pen_down = ad.distance_pendown
+            #    dist_pen_total = ad.distance_total
+            #    pen_lifts = ad.pen_lifts
+            pass
         else:
             print("plotting failed, error", ad.errors.code)
+        if preview :
+            options.preview = False
+            options.report_time = oldRT
     except RuntimeError as err:
         # Error msg has already been printed
         pass
@@ -703,6 +712,10 @@ loadDefaultConfig()   # FIXME only if nothing on command line
 # Load config file(s) supplied on command line
 loadConfig(sys.argv[1:])
 
+# Make sure preview option is not set -- it interferes some modes,
+# and we use it a bit differently (see plotFile()).
+options.preview = False
+
 align()
 
 loadHistory()
@@ -767,6 +780,8 @@ while True:
         print("motors are off")
     elif shortCmd == "pt":
         plotFile(args)
+    elif shortCmd == "pv":
+        plotFile(args, True)
     elif shortCmd == "op":
         loadConfig(args)
     elif shortCmd == "ou":
@@ -805,8 +820,6 @@ while True:
         options.report_time = getBool("report", options.report_time, args)
     elif shortCmd == "cs":
         options.const_speed = getBool("const", options.const_speed, args)
-    elif shortCmd == "pv":
-        options.preview = getBool("preview", options.preview, args)
     elif shortCmd == "au":
         options.auto_rotate = getBool("auto", options.auto_rotate, args)
     elif shortCmd == "rg":
