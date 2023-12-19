@@ -19,6 +19,10 @@
 #   for display and input if required.
 
 # TODO
+# * sd su abbreviations
+# * abort in middle of plot
+# * ls -- alphabetical, -l and -a with dir name, and sorted
+#* FIXME: plot ends at 270,0 instead of 0,0
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
 # * make sure all options report just their current value if no args
@@ -36,6 +40,8 @@
 # * change/set current directory; list plottable files in current directory.
 # * turn motors off after a delay (or does the firmware do that?)
 # * allow entered filenames to have spaces -- i.e. join the args
+# * fancy dialling in of 2 or 3 points on the substrate, and transforming whole plot to fit
+# * hidden line removal
 
 import atexit
 import os
@@ -59,6 +65,7 @@ alignY = None
 outputFilename = 'none'
 
 # 'Constants'
+version = "0.1.0"   # adreply version
 configDir = "~/.config/adrepl/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -142,6 +149,7 @@ accel, \
 align, \
 auto_rotate <y/n>, \
 cd <directory>, \
+config, \
 const_speed <y/n>, \
 copies <0-9999>, \
 cycle, \
@@ -172,8 +180,8 @@ rendering <0-3>, \
 reordering <0-4>, \
 report_time <y/n>, \
 save [<filename>], \
-speeddown|speed_pendown <1-100>, \
-speedup|speed_penup <1-100>, \
+speeddown|speed_pendown|sd <1-100>, \
+speedup|speed_penup|su <1-100>, \
 sysinfo, \
 toggle, \
 units <mm>|<inches>, \
@@ -184,6 +192,7 @@ walky|y <distance> \
 """)
     print("Commands can be abbreviated as long as what you type is unambiguous.")
 
+# List of commands with the associated short internal command name
 cmdList = [
     ("accel", "ac"),
     ("align", "al"),
@@ -201,7 +210,7 @@ cmdList = [
     ("enable_xy", "on"),
     ("fw_version", "fw"),
     ("help", "he"),
-    ("home", "ho"),
+    ("home", "wh"),
     ("lower_pen", "do"),
     ("ls", "ls"),
     ("model", "mo"),
@@ -236,6 +245,8 @@ cmdList = [
     ("speed_penup", "su"),
     ("speeddown", "sd"),
     ("speedup", "su"),
+    ("sd", "sd"),
+    ("su", "su"),
     ("sysinfo", "sy"),
     ("toggle", "tg"),
     ("units", "un"),
@@ -283,7 +294,7 @@ def loadDefaultConfig ():
 # Adapted to work here.
 # Options and parameters set before this point WILL BE IGNORED.
 def loadConfig (args, showOutput=True):
-    print(f"loadConfig: {args=} {showOutput=}")
+    #print(f"loadConfig: {args=} {showOutput=}")
     if len(args) == 0:
         # just print the current config
         print("options:", options)
@@ -389,9 +400,10 @@ def get1Int (args):
 # Get a value within a range: return the new value,
 # or the old value if the new one is invalid.
 def getRange (optName, low, high, oldValue, args):
+    #print(f"getRange({optName},{low},{high},{oldValue},{args} len={len(args)})")
     if len(args) == 0:
         print(oldValue)
-        return
+        return oldvalue
     value, err = get1Float(args)    # FIXME float or int?
     if err:
         print(f"{optName}: invalid value")

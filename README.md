@@ -113,9 +113,9 @@ Turn plot reporting on or off.
 ### `save [<filename>]`
 Save the current configuration (aka options) to the specified file.  If no file name is given,
 use the default name (`~/.config/adrepl/axidraw_config.py`).
-### `speeddown|speed_pendown <1-100>`
+### `speeddown|speed_pendown|sd <1-100>`
 Set the plotting speed when the pen is down, as a percentage of the maximum.
-### `speedup|speed_penup <1-100>`
+### `speedup|speed_penup|su <1-100>`
 Set the plotting speed when the pen is up, as a percentage of the maximum.
 ### `sysinfo`
 Display system information.
@@ -126,9 +126,13 @@ Set the units for future commands to either millimetres or inches.
 ### `up|raise_pen`
 Move the pen up.
 ### `version`
-Display the software version.
+Display the Python API software version.
+### `walk_home`
+See `home`.
 ### `walkx|x <distance>`
+Move <distance> (in the current units) horizontally, relative to the current position.  Positive values move to the right, negative ones to the left.  WARNING re limits.
 ### `walky|y <distance>`
+Move <distance> (in the current units) vertically, relative to the current position.  Positive values move down, negative ones up.  WARNING re limits.
 
 ## Registering
 
