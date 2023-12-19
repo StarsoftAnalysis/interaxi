@@ -19,17 +19,13 @@
 #   for display and input if required.
 
 # TODO
-# * sd su abbreviations
 # * abort in middle of plot
-# * ls -- alphabetical, -l and -a with dir name, and sorted
 #* FIXME: plot ends at 270,0 instead of 0,0
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
-# * make sure all options report just their current value if no args
 #   - simplify model
 # * interactive mode for some things??
 # * loop to print many copies -- rather than built-in copy thing.
-# * complete filenames
 # * resolution, reordering options
 # * maybe: check ad.errors.code at end of REPL (after every command)
 # * cmd to draw a reg mark
@@ -37,13 +33,13 @@
 #   derive its name from .svg filename to allow auto resume
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
 #   - otherwise saved config will become a meaningless jumble.
-# * change/set current directory; list plottable files in current directory.
 # * turn motors off after a delay (or does the firmware do that?)
 # * allow entered filenames to have spaces -- i.e. join the args
 # * fancy dialling in of 2 or 3 points on the substrate, and transforming whole plot to fit
 # * hidden line removal
 
 import atexit
+from datetime import datetime
 import os
 import signal
 import sys
@@ -701,19 +697,23 @@ def cd (args):
     print(os.getcwd())
 
 def ls ():
+    print(f"{os.getcwd()}:")
     with os.scandir() as entries:
-        count = 0
+        # build list of file details for sorting
+        l = []
         for entry in entries:
-            if entry.name.startswith('.'):
-                continue
             if entry.is_file() and entry.name.lower().endswith(".svg"):
-                print(entry.name)
-                count += 1
+                l.append({"name": entry.name, "size": entry.stat().st_size, "mtime": entry.stat().st_mtime, "dirchar": ""})
             if entry.is_dir():
-                print(entry.name + '/')
-                count += 1
-        if count == 0:
-            print("No usable entries in current directory")
+                l.append({"name": entry.name, "size": entry.stat().st_size, "mtime": entry.stat().st_mtime, "dirchar": "/"})
+        if len(l) == 0:
+            print("No plottable (.svg) files in current directory")
+            return
+        l = sorted(l, key=lambda d: d['name']) # sort by 'name' field
+        for entry in l:
+            utcmtime  = datetime.utcfromtimestamp(entry['mtime'])
+            timestamp = utcmtime.strftime("%Y-%m-%d %H:%M:%S")
+            print(f"{entry['size']:11d}  {timestamp}  {entry['name']}{entry['dirchar']}")
 
 def restoreCWD ():
     os.chdir(origDir)
