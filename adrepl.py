@@ -19,24 +19,22 @@
 #   for display and input if required.
 
 # TODO
-# * abort in middle of plot
-#* FIXME: plot ends at 270,0 instead of 0,0
+# * abort in middle of plot - see https://github.com/evil-mad/axidraw/issues/75
+#   - pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
+#     derive its name from .svg filename to allow auto resume
+#* FIXME: plot ends at 270,0 instead of 0,0 ??
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
 #   - simplify model
 # * interactive mode for some things??
 # * loop to print many copies -- rather than built-in copy thing.
-# * resolution, reordering options
 # * maybe: check ad.errors.code at end of REPL (after every command)
 # * cmd to draw a reg mark
-# * pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
-#   derive its name from .svg filename to allow auto resume
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
 #   - otherwise saved config will become a meaningless jumble.
 # * turn motors off after a delay (or does the firmware do that?)
 # * allow entered filenames to have spaces -- i.e. join the args
 # * fancy dialling in of 2 or 3 points on the substrate, and transforming whole plot to fit
-# * hidden line removal
 
 import atexit
 from datetime import datetime
@@ -117,6 +115,46 @@ def maxY ():  # inches
 # Local store for options
 class Options:
     def __init__ (self):
+        # Hard-coded default options
+        self.__dict__ = {
+            "accel": 75,
+            "auto_rotate": True,
+            "const_speed": False,
+            "copies": 1,
+            "digest": 0,
+            "dist": 1.0,
+            "hiding": False,
+            "ids": [],
+            "layer": 1,
+            "manual_cmd": 'enable_xy',
+            "mode": 'manual',
+            "model": 1,
+            "no_rotate": False,
+            "page_delay": 15,
+            "pen_delay_down": 0,
+            "pen_delay_up": 0,
+            "pen_pos_down": 30,
+            "pen_pos_up": 60,
+            "pen_rate_lower": 50,
+            "pen_rate_raise": 75,
+            "penlift": 1,
+            "port": None,
+            "port_config": 0,
+            "preview": False,
+            "random_start": False,
+            "rendering": 3,
+            "reordering": 0,
+            "report_time": True,
+            "resolution": 1,
+            "resume_type": 'plot',
+            "selected_nodes": [],
+            "setup_type": 'align',
+            "speed_pendown": 25,
+            "speed_penup": 75,
+            "submode": 'none',
+            "webhook": False,
+            "webhook_url": None,
+        }
         pass
     def __repr__ (self):
         # sort the keys for easier reading
@@ -155,6 +193,7 @@ delayup|pen_delay_up <ms>, \
 down|lower_pen, \
 fw_version, \
 help, \
+hiding <y/n>, \
 home|walk_home, \
 ls, \
 model [<num>], \
@@ -206,6 +245,7 @@ cmdList = [
     ("enable_xy", "on"),
     ("fw_version", "fw"),
     ("help", "he"),
+    ("hiding", "hi"),
     ("home", "wh"),
     ("lower_pen", "do"),
     ("ls", "ls"),
@@ -290,12 +330,14 @@ def loadDefaultConfig ():
 # Adapted to work here.
 # Options and parameters set before this point WILL BE IGNORED.
 def loadConfig (args, showOutput=True):
+    global options
     #print(f"loadConfig: {args=} {showOutput=}")
     if len(args) == 0:
         # just print the current config
         print("options:", options)
         return
     optionsChanged = False
+    options = Options() # set to hard-coded defaults
     for filename in args:
         configFilename = os.path.expanduser(filename)
         try:
@@ -786,6 +828,8 @@ while True:
         walkHome()
     elif shortCmd == "fw":
         manual("fw_version")
+    elif shortCmd == "hi":
+        options.hiding = getBool("hiding", options.hiding, args)
     elif shortCmd == "up":
         manual("raise_pen")
     elif shortCmd == "do":
