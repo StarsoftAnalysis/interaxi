@@ -46,7 +46,6 @@ try:
     import readline
 except ImportError:
     readline = None
-
 from curtsies  import Input
 from pyaxidraw import axidraw
 from axicli    import utils as acutils
@@ -59,7 +58,7 @@ alignY = None
 outputFilename = 'none'
 
 # 'Constants'
-version = "0.1.0"   # adreply version
+version = "0.1.0"   # adrepl version
 configDir = "~/.config/adrepl/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -631,18 +630,29 @@ def showPos ():
 
 def plotFile (args, preview=False):
     cmdName = "preview" if preview else "plot"
-    if len(args) == 0 or len(args) > 2:
+    layer = None
+    # args will be |"filename.svg"| or |"filename.svg" "3"| or |"long" "file" "name.svg" "2"| etc.
+    # If filename has spaces, we need to stick it back together.
+    if len(args) > 1:
+        # Use last arg as layer number if it's numeric
+        layer, err = getInt(args[-1])
+        if err:
+            # Not numeric -- take it as part of the filename
+            pass
+        else:
+            if layer < 0 or layer > 1000:
+                print(f"{cmdName}: layer must be a whole number between 0 and 1000", err)
+                return
+            # Numeric layer 
+            args.pop()
+    if len(args) == 0:
         print(f"{cmdName}: need one filename (and optional layer prefix)")
         return
-    filename = os.path.expanduser(args[0].strip(" \"'\t\r\n"))
-    layer = None
-    if len(args) == 2:
-        layer, err = getInt(args[1])
-        if err or layer < 0 or layer > 1000:
-            print(f"{cmdName}: layer must be a whole number between 0 and 1000", err)
-            return
+    # Gather the rest of the args into a single string
+    filename = ' '.join(args)
+    filename = os.path.expanduser(filename.strip(" \"'\t\r\n"))
     try:
-        if layer:
+        if layer is not None:
             options.mode = "layers"
             print(f"plotting file '{filename}' layer {layer}")
         else:

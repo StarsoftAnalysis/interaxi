@@ -74,6 +74,8 @@ The plot (or preview) command will create an output file if you specify a file n
 WARNING: If the specified file already exists, it will be overwritten.
 ### `plot <filename> [<layer>]`
 Run the plot from the given filename.  If a layer number (1-1000) is given, plot only that layer.
+Don't put quotation marks `"` or `'` around the file name, even if it contains spaces.
+Examples: `plot file1.svg` `plot file1.svg 3` `file with spaces.svg` `file layer two.svg 2`
 ### `posdown|pen_pos_down <0-100>`
 Set the down position of the pen (as a percentage of the total travel of the servo).
 ### `position`
