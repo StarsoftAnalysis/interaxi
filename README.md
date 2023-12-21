@@ -9,6 +9,13 @@ so I wrote this wrapper using the Python API.
 Run ```adrepl.py``` or ```python adrepl.py```, and then 
 follow the prompts and enter commands to control the plotter.
 
+By default, adrepl.py reads its initial configuration from `<homedir>/.config/adrepl/axidraw_conf.py`.  
+An alternative configuration file can be given on the command line, e.g.
+```
+adrepl.py special_conf.py
+```
+Configurations can also be loaded from within adrepl using the `config` or `options` commands.
+
 ## Commands
 
 Some commands have synonyms to be consistent with the original axicli commands.  For example `x` and `walk_x` do the same thing.
@@ -45,6 +52,8 @@ Move the pen down.
 Display the firmware version.
 ### `help`
 Display a brief reminder of the available commands.
+### `hiding <y/n>`
+Turn the AxiDraw's [hidden line removal feature](https://www.evilmadscientist.com/2023/hidden-paths-axidraw/) on or off.
 ### `home|walk_home`
 Move the pen to the current home position (as defined by the last time the motors were enabled,
 either with `on`, `align`, or `sethome`.
@@ -52,13 +61,13 @@ either with `on`, `align`, or `sethome`.
 List the plottable (.svg) files in the current directory.
 ### `model [<num>]`
 Set the AxiDraw model number: 
-    1 - AxiDraw V2, V3, or SE/A4
-    2 - AxiDraw V3/A3 or SE/A3
-    3 - AxiDraw V3 XLX
-    4 - AxiDraw MiniKit
-    5 - AxiDraw SE/A1
-    6 - AxiDraw SE/A2
-    7 - AxiDraw V3/B6
+1 AxiDraw V2, V3, or SE/A4
+2 AxiDraw V3/A3 or SE/A3
+3 AxiDraw V3 XLX
+4 AxiDraw MiniKit
+5 AxiDraw SE/A1
+6 AxiDraw SE/A2
+7 AxiDraw V3/B6
 ### `off|disable_xy`
 Turn the x/y stepper motors off.
 ### `on|enable_xy`
