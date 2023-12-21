@@ -184,7 +184,7 @@ accel, \
 align, \
 auto_rotate <y/n>, \
 cd <directory>, \
-config, \
+config|options [<filename>], \
 const_speed <y/n>, \
 copies <0-9999>, \
 cycle, \
@@ -440,7 +440,7 @@ def getRange (optName, low, high, oldValue, args):
     #print(f"getRange({optName},{low},{high},{oldValue},{args} len={len(args)})")
     if len(args) == 0:
         print(oldValue)
-        return oldvalue
+        return oldValue
     value, err = get1Float(args)    # FIXME float or int?
     if err:
         print(f"{optName}: invalid value")
