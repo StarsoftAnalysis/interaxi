@@ -114,7 +114,9 @@ def maxY ():  # inches
 # Local store for options
 class Options:
     def __init__ (self):
-        # Hard-coded default options
+        # Hard-coded default options,
+        # just to make sure they all have values.
+        # Most will get updated from ad.options straight away.
         self.__dict__ = {
             "accel": 75,
             "auto_rotate": True,
@@ -296,11 +298,12 @@ cmdList = [
 ]
 
 # Match the abbreviated command against the list,
-# returning short-command or None
+# returning short-command or "" or None
 def miniMatch (cmd):
     if cmd == "":
-        return [""], ""
-    global cmdList
+        print("Type a command, or try 'help'")
+        return ""
+    #global cmdList
     matched = []
     short = None
     for pair in cmdList:
@@ -315,19 +318,16 @@ def miniMatch (cmd):
     n = len(matched)
     #print(f"{matched=}")
     if n == 0:
-        print(f"Command '{cmd}' is not known.  Try 'help'")
+        print(f"Command '{cmd}' is not known.  Try typing 'help'.")
         return None
     if n == 1:
         return short
     print(f"Command '{cmd}' is ambiguous -- it could match any of {matched}")
     return None
 
-def loadDefaultConfig ():
-    loadConfig([defaultConfigFile], True)
-
-# Code for loading configuration file(s) provided by Windell Oskay, 22 April 2023.
+# Code for loading configuration file provided by Windell Oskay, 22 April 2023.
 # Adapted to work here.
-# Options and parameters set before this point WILL BE IGNORED.
+# Overwrites existing options if new values are in the file.
 def loadConfig (args, showOutput=True):
     global options
     #print(f"loadConfig: {args=} {showOutput=}")
@@ -336,18 +336,18 @@ def loadConfig (args, showOutput=True):
         print("options:", options)
         return
     optionsChanged = False
-    options = Options() # set to hard-coded defaults
-    for filename in args:
-        configFilename = os.path.expanduser(filename)
+    # NOT NEEDED -- once on startup is enough.   options = Options() # set to hard-coded defaults
+    # Gather the rest of the args into a single string
+    filename = argsToFileName(args)
+    if filename:
         try:
-            config_dict = acutils.load_config(configFilename)
-            #print("loaded OK")
+            config_dict = acutils.load_config(filename)
+            options.set(config_dict)
+            optionsChanged = True
+            print(f"config file '{filename}' loaded")
         except SystemExit as err:
             #print("SE error:", err, "done")
-            continue
-        options.set(config_dict)
-        optionsChanged = True
-        print(f"config file '{configFilename}' loaded")
+            pass
     if optionsChanged and showOutput:
         print(f"new options: {options}")
 
@@ -385,7 +385,7 @@ def saveConfig (args):
         print("Unable to save configuration:", err)
 
 def handleSigint (*args):
-    print("done (Ctrl-C pressed)")
+    print("\ndone (Ctrl-C pressed)")
     quit()
 
 # Apply local options, and then call plot_run()
@@ -628,6 +628,12 @@ def showPos ():
     else:
         print("Head position is unknown.  Use 'align' to manually move head to 0,0.")
 
+def argsToFileName (args):
+    # Gather the args into a single string for use as a file name
+    filename = ' '.join(args)
+    filename = os.path.expanduser(filename.strip(" \"'\t\r\n"))
+    return filename
+
 def plotFile (args, preview=False):
     cmdName = "preview" if preview else "plot"
     layer = None
@@ -649,8 +655,7 @@ def plotFile (args, preview=False):
         print(f"{cmdName}: need one filename (and optional layer prefix)")
         return
     # Gather the rest of the args into a single string
-    filename = ' '.join(args)
-    filename = os.path.expanduser(filename.strip(" \"'\t\r\n"))
+    filename = argsToFileName(args)
     try:
         if layer is not None:
             options.mode = "layers"
@@ -780,12 +785,16 @@ ad.plot_setup()                 # Go into plot mode and create ad.options
 # Copy initial ad.options into local options
 options.set(ad.options.__dict__)
 
-# Load default config file
-loadDefaultConfig()   # FIXME only if nothing on command line
-# Load config file(s) supplied on command line
-loadConfig(sys.argv[1:])
+if len(sys.argv[1:]) == 0:
+    # Load default config file
+    loadConfig([defaultConfigFile], True)
+else:
+    # Load config files from command line 
+    # (one at a time because that's how loadConfig works)
+    for arg in sys.argv[1:]:
+        loadConfig(arg, True)
 
-# Make sure preview option is not set -- it interferes some modes,
+# Make sure preview option is not set -- it interferes with some modes,
 # and we use it a bit differently (see plotFile()).
 options.preview = False
 
@@ -801,15 +810,13 @@ while True:
         line = input("> ")  # .decode('utf-8').strip()
     except EOFError:
         # Ctrl-D pressed
-        print("done (Ctrl-D pressed)")
+        print("\ndone (Ctrl-D pressed)")
         break
     cmd, args = parse(line)
     shortCmd = miniMatch(cmd)
-    if shortCmd == None:
-        pass
-    elif shortCmd == "":
-        print("Type a command, or try 'help'")
-    elif shortCmd == "he":
+    if not shortCmd:
+        continue
+    if shortCmd == "he":
         printHelp()
     elif shortCmd == "qu":
         print("done")
@@ -908,7 +915,7 @@ while True:
         ls()
 
     else:
-        print(f"Command '{cmd}' is not known.  Try 'help'")
+        print(f"Short command '{shortCmd}' ('{cmd}') is not known.")
 
 
 # end of REPL loop
