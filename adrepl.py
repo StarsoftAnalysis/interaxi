@@ -180,8 +180,15 @@ class Options:
             r += f"'{key}': {val}, "
         return r + "}"
     def set (self, sourceDict):
+        # set options from a dictionary
         for key, val in sourceDict.items():
             self.__dict__[key] = val
+            print(f"set {key}={val}")
+    def setFromParams (self, paramsDict):
+        # 'additional' options from ad.params
+        for key in ['min_gap', 'report_lifts']:
+            self.__dict__[key] = paramsDict[key]
+            print(f"setFromParams {key}={paramsDict[key]}")
 options = Options()
 
 ##############################################################
@@ -813,6 +820,8 @@ signal.signal(signal.SIGINT, handleSigint)
 ad = axidraw.AxiDraw()          # Initialize class
 ad.plot_setup()                 # Go into plot mode and create ad.options
 # Copy initial ad.options into local options
+options.setFromParams(ad.params.__dict__)
+# User options override params:
 options.set(ad.options.__dict__)
 
 if len(sys.argv[1:]) == 0:
