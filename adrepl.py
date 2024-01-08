@@ -19,9 +19,6 @@
 #   for display and input if required.
 
 # TODO
-# * get ad.params in same way as writing them -- has Windell updated to API since his email?
-# * report_lifts
-# * store units in config (even though it's not an axidraw option)  i.e. use options.units instead of currentUnits
 # * various places: return None for err, not ""   Which is better in Python?
 # * when setting an option, confirm the new value (esp. with a distance)
 # * abort in middle of plot - see https://github.com/evil-mad/axidraw/issues/75
@@ -57,14 +54,13 @@ from pyaxidraw import axidraw
 from axicli    import utils as acutils
 
 # Globals:
-currentUnits = "mm"
 aligned = False     # True if we know where the head is.
 alignX = None       # Head position if aligned in inches.
 alignY = None
 outputFilename = 'none'
 
 # 'Constants'
-version = "0.1.1"   # adrepl version
+version = "0.1.2"   # adrepl version
 configDir = "~/.config/adrepl/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -154,6 +150,7 @@ class Options:
             "rendering": 3,
             "reordering": 0,
             "report_time": True,
+            "report_lifts": True,   # additional
             "resolution": 1,
             "resume_type": 'plot',
             "selected_nodes": [],
@@ -176,19 +173,19 @@ class Options:
             val = self.__dict__[key]
             if key in ['min_gap']:
                 # distances -- need to adjust for current units
-                val = fmtDist(val) + ' ' + currentUnits
+                val = fmtDist(val) + ' ' + options.units
             r += f"'{key}': {val}, "
         return r + "}"
     def set (self, sourceDict):
         # set options from a dictionary
         for key, val in sourceDict.items():
             self.__dict__[key] = val
-            print(f"set {key}={val}")
+            #print(f"set {key}={val}")
     def setFromParams (self, paramsDict):
         # 'additional' options from ad.params
         for key in ['min_gap', 'report_lifts']:
             self.__dict__[key] = paramsDict[key]
-            print(f"setFromParams {key}={paramsDict[key]}")
+            #print(f"setFromParams {key}={paramsDict[key]}")
 options = Options()
 
 ##############################################################
@@ -231,6 +228,7 @@ register, \
 rendering <0-3>, \
 reordering <0-4>, \
 report_time <y/n>, \
+report_lifts <y/n>, \
 save [<filename>], \
 speeddown|speed_pendown|sd <1-100>, \
 speedup|speed_penup|su <1-100>, \
@@ -293,6 +291,7 @@ cmdList = [
     ("rendering", "rn"),
     ("reordering", "ro"),
     ("report_time", "rp"),
+    ("report_lifts", "rl"),
     ("save", "sc"),
     ("sethome", "sh"),
     ("speed_pendown", "sd"),
@@ -412,7 +411,7 @@ def handleSigint (*args):
 # Apply local options, and then call plot_run()
 def plotRun (inputFilename=None):
     for key, value in options.__dict__.items():
-        if key in ['min_gap']:
+        if key in ['min_gap', 'report_lifts']:
             # 'additional' option -- see https://axidraw.com/doc/py_api/#additional-parameters
             ad.params.__dict__[key] = value
         else:
@@ -506,18 +505,18 @@ def get1Float (args):
 
 def getDist (args):
     if len(args) != 1:
-        return None, f"need a distance ({currentUnits})"
+        return None, f"need a distance ({options.units})"
     d, err = getFloat(args[0])
     if err:
         return None, err
-    if currentUnits == "mm":
+    if options.units == "mm":
         # store as inches
         d /= 25.4
     return d, ""
 
-def getMinGap (args):
+def setMinGap (args):
     if len(args) == 0:
-        print(f"{fmtDist(options.min_gap)} {currentUnits}") 
+        print(f"{fmtDist(options.min_gap)} {options.units}") 
         return
     dist, err = getDist(args)
     if err:
@@ -528,7 +527,6 @@ def getMinGap (args):
 
 # Allow fine tuning of position using arrow keys.
 def registerXY():
-    global currentUnits
     nl = ""
     def showMove (m):
         nonlocal nl
@@ -539,10 +537,10 @@ def registerXY():
         print(f"{nl}{msg}")
         nl = ""
     # Start with medium jumps
-    regDist = regDistances[currentUnits]["m"]
+    regDist = regDistances[options.units]["m"]
     print("registering: press arrow keys to move.")
     print("press f for fine, m for medium, c for coarse; u/d for pen up/down; q or ESC to stop.")
-    print(f"medium {regDist}{currentUnits} steps")
+    print(f"medium {regDist}{options.units} steps")
     with Input(keynames='curtsies') as input_generator:
         for e in Input():   # e is a keypress or other event
             if e in ('<ESC>', '<SPACE>', 'q'):
@@ -561,14 +559,14 @@ def registerXY():
                 showMove("\u2192")
                 walk('x', [regDist])
             elif e in ('f', 'F'):
-                regDist = regDistances[currentUnits]["f"]
-                printMsg(f"fine {regDist}{currentUnits} steps")
+                regDist = regDistances[options.units]["f"]
+                printMsg(f"fine {regDist}{options.units} steps")
             elif e in ('m', 'M'):
-                regDist = regDistances[currentUnits]["m"]
-                printMsg(f"medium {regDist}{currentUnits} steps")
+                regDist = regDistances[options.units]["m"]
+                printMsg(f"medium {regDist}{options.units} steps")
             elif e in ('c', 'C'):
-                regDist = regDistances[currentUnits]["c"]
-                printMsg(f"coarse {regDist}{currentUnits} steps")
+                regDist = regDistances[options.units]["c"]
+                printMsg(f"coarse {regDist}{options.units} steps")
             elif e in ('u', 'U'):
                 manual("raise_pen")
                 showMove("u")
@@ -588,21 +586,20 @@ def setHome ():
     manual("enable_xy")
 
 def setUnits (args):
-    global currentUnits
     if len(args) >= 1:
         u = args[0].strip().lower()
         if u == "mm" or "millimetres".startswith(u):
-            currentUnits = "mm"
+            options.units = 'mm'
         elif "inches".startswith(u):
-            currentUnits = "in"
+            options.units = 'in'
         else:
             print("need 'mm' or 'in'")
-    print("current units:", currentUnits)
+    print("units ", options.units)
 
 # Format a distance for printing in the current units
 def fmtDist (d):
     format = ".4f"
-    if currentUnits == "mm":
+    if options.units == "mm":
         format = ".2f"
         d *= 25.4
     return f"{d:{format}}"
@@ -635,7 +632,7 @@ def walk (xy, args):
                 limited = True
             alignY += dist
         if limited:
-            print(f"Limited to {fmtDist(dist)} {currentUnits}") 
+            print(f"Limited to {fmtDist(dist)} {options.units}") 
     # (if not aligned, DOES ONLY MINIMAL CHECKS)
     else:
         if xy == 'x':
@@ -661,7 +658,7 @@ def showPos ():
     if aligned: 
         x = alignX
         y = alignY
-        print(f"{fmtDist(x)}, {fmtDist(y)} {currentUnits}")
+        print(f"{fmtDist(x)}, {fmtDist(y)} {options.units}")
     else:
         print("Head position is unknown.  Use 'align' to manually move head to 0,0.")
 
@@ -703,9 +700,12 @@ def plotFile (args, preview=False):
         options.layer = layer    # even if it's None
         ad.plot_setup(filename) # This changes ad.options
         oldRT = options.report_time
+        oldRL = options.report_lifts
         if preview:
+            # Always do these for previews
             options.preview = True
             options.report_time = True
+            options.report_lifts = True
         plotRun(filename)   # This re-applies local options to ad.options
         if ad.errors.code == 0:
             ## The report will already have been printed,
@@ -722,6 +722,7 @@ def plotFile (args, preview=False):
         if preview :
             options.preview = False
             options.report_time = oldRT
+            options.report_lifts = oldRL
     except RuntimeError as err:
         # Error msg has already been printed
         pass
@@ -935,7 +936,9 @@ while True:
     elif shortCmd == "rd":
         options.random_start = getBool("random", options.random_start, args)
     elif shortCmd == "rp":
-        options.report_time = getBool("report", options.report_time, args)
+        options.report_time = getBool("report_time", options.report_time, args)
+    elif shortCmd == "rl":
+        options.report_lifts = getBool("report_lifts", options.report_lifts, args)
     elif shortCmd == "cs":
         options.const_speed = getBool("const", options.const_speed, args)
     elif shortCmd == "au":
@@ -953,11 +956,10 @@ while True:
     elif shortCmd == "ls":
         ls()
     elif shortCmd == "mg":
-        getMinGap(args)
+        setMinGap(args)
 
     else:
         print(f"Short command '{shortCmd}' ('{cmd}') is not known.")
-
 
 # end of REPL loop
 
