@@ -19,9 +19,15 @@
 #   for display and input if required.
 
 # TODO
+# * get ad.params in same way as writing them -- has Windell updated to API since his email?
+# * report_lifts
+# * store units in config (even though it's not an axidraw option)  i.e. use options.units instead of currentUnits
+# * various places: return None for err, not ""   Which is better in Python?
+# * when setting an option, confirm the new value (esp. with a distance)
 # * abort in middle of plot - see https://github.com/evil-mad/axidraw/issues/75
 #   - pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
 #     derive its name from .svg filename to allow auto resume
+#   - currently ctrl-C aborts plot and adrepl
 #* FIXME: plot ends at 270,0 instead of 0,0 ??
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
@@ -58,7 +64,7 @@ alignY = None
 outputFilename = 'none'
 
 # 'Constants'
-version = "0.1.0"   # adrepl version
+version = "0.1.1"   # adrepl version
 configDir = "~/.config/adrepl/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -117,6 +123,7 @@ class Options:
         # Hard-coded default options,
         # just to make sure they all have values.
         # Most will get updated from ad.options straight away.
+        # Distances are in inches -- as per standard AxiDraw configs.
         self.__dict__ = {
             "accel": 75,
             "auto_rotate": True,
@@ -128,6 +135,7 @@ class Options:
             "ids": [],
             "layer": 1,
             "manual_cmd": 'enable_xy',
+            "min_gap": 0.006,   # distance; additional
             "mode": 'manual',
             "model": 1,
             "no_rotate": False,
@@ -153,6 +161,7 @@ class Options:
             "speed_pendown": 25,
             "speed_penup": 75,
             "submode": 'none',
+            "units": 'in',  # NOTE not an AxiDraw option -- invented for adrepl
             "webhook": False,
             "webhook_url": None,
         }
@@ -164,13 +173,12 @@ class Options:
         keys = list(self.__dict__)
         keys.sort()
         for key in keys:
-            r += f"'{key}': {self.__dict__[key]}, "
+            val = self.__dict__[key]
+            if key in ['min_gap']:
+                # distances -- need to adjust for current units
+                val = fmtDist(val) + ' ' + currentUnits
+            r += f"'{key}': {val}, "
         return r + "}"
-    def write(self, f):
-        keys = list(self.__dict__)
-        keys.sort()
-        for key in keys:
-            f.write(f"{key} = {self.__dict__[key]}")
     def set (self, sourceDict):
         for key, val in sourceDict.items():
             self.__dict__[key] = val
@@ -184,7 +192,7 @@ accel, \
 align, \
 auto_rotate <y/n>, \
 cd <directory>, \
-config|options [<filename>], \
+config, \
 const_speed <y/n>, \
 copies <0-9999>, \
 cycle, \
@@ -197,6 +205,7 @@ help, \
 hiding <y/n>, \
 home|walk_home, \
 ls, \
+min_gap [<dist>], \
 model [<num>], \
 off|disable_xy, \
 on|enable_xy, \
@@ -250,6 +259,7 @@ cmdList = [
     ("home", "wh"),
     ("lower_pen", "do"),
     ("ls", "ls"),
+    ("min_gap", "mg"),
     ("model", "mo"),
     ("off", "of"),
     ("on", "on"),
@@ -325,6 +335,11 @@ def miniMatch (cmd):
     print(f"Command '{cmd}' is ambiguous -- it could match any of {matched}")
     return None
 
+# Print the current config
+def printConfig():
+    #for opt in options:
+    pass
+
 # Code for loading configuration file provided by Windell Oskay, 22 April 2023.
 # Adapted to work here.
 # Overwrites existing options if new values are in the file.
@@ -367,7 +382,6 @@ def setOutputFilename (args):
 # Save the current options.
 # NOTE: some options e.g. 'mode' will just save the last value used,
 # e.g. if last command was 'align', the mode will be save as 'align'.
-# So how useful is this?
 def saveConfig (args):
     if len(args) == 0:
         filename = defaultConfigFile
@@ -391,7 +405,12 @@ def handleSigint (*args):
 # Apply local options, and then call plot_run()
 def plotRun (inputFilename=None):
     for key, value in options.__dict__.items():
-        ad.options.__dict__[key] = value
+        if key in ['min_gap']:
+            # 'additional' option -- see https://axidraw.com/doc/py_api/#additional-parameters
+            ad.params.__dict__[key] = value
+        else:
+            # 'normal' option
+            ad.options.__dict__[key] = value
     #print(f"Running with options {options}")
     #print(f"{inputFilename=}  {outputFilename=}")
     if inputFilename and outputFilename != 'none':
@@ -440,7 +459,7 @@ def getRange (optName, low, high, oldValue, args):
     #print(f"getRange({optName},{low},{high},{oldValue},{args} len={len(args)})")
     if len(args) == 0:
         print(oldValue)
-        return oldValue
+        return oldvalue
     value, err = get1Float(args)    # FIXME float or int?
     if err:
         print(f"{optName}: invalid value")
@@ -488,6 +507,17 @@ def getDist (args):
         # store as inches
         d /= 25.4
     return d, ""
+
+def getMinGap (args):
+    if len(args) == 0:
+        print(f"{fmtDist(options.min_gap)} {currentUnits}") 
+        return
+    dist, err = getDist(args)
+    if err:
+       printf(err)
+       return
+    options.min_gap = dist
+    return
 
 # Allow fine tuning of position using arrow keys.
 def registerXY():
@@ -564,7 +594,7 @@ def setUnits (args):
 
 # Format a distance for printing in the current units
 def fmtDist (d):
-    format = ".3f"
+    format = ".4f"
     if currentUnits == "mm":
         format = ".2f"
         d *= 25.4
@@ -598,7 +628,7 @@ def walk (xy, args):
                 limited = True
             alignY += dist
         if limited:
-            print(f"Limited to {fmtDist(dist)}") 
+            print(f"Limited to {fmtDist(dist)} {currentUnits}") 
     # (if not aligned, DOES ONLY MINIMAL CHECKS)
     else:
         if xy == 'x':
@@ -913,6 +943,8 @@ while True:
         cd(args)
     elif shortCmd == "ls":
         ls()
+    elif shortCmd == "mg":
+        getMinGap(args)
 
     else:
         print(f"Short command '{shortCmd}' ('{cmd}') is not known.")
