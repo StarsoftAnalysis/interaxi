@@ -5,11 +5,11 @@
 
 # Issues:
 # * With old (pre 3.8?) software, 'dist' was spelled 'walk_dist' --
-#   this code only reads both from config files -- which overrides the other?
+#   this code only reads both from config files -- dist overrides walk_dist
 
 # NOTES:
 # * options get reset by plot_setup: the docs says they can be set 
-#   between plot_setup and plot run.  So we need to keep and options 
+#   between plot_setup and plot run.  So we need to keep an options 
 #   object, and apply them all before each plot_run (or after plot_setup).
 # * developed and tested on Raspberry Pi (orig B+) running Raspbian bullseye.
 # * requirements:
@@ -20,7 +20,7 @@
 
 # TODO
 # * various places: return None for err, not ""   Which is better in Python?
-# * when setting an option, confirm the new value (esp. with a distance)
+# * when setting an option, confirm the new value (esp. with a distance) -- requires lots of changes
 # * abort in middle of plot - see https://github.com/evil-mad/axidraw/issues/75
 #   - pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
 #     derive its name from .svg filename to allow auto resume
@@ -36,7 +36,6 @@
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
 #   - otherwise saved config will become a meaningless jumble.
 # * turn motors off after a delay (or does the firmware do that?)
-# * allow entered filenames to have spaces -- i.e. join the args
 # * fancy dialling in of 2 or 3 points on the substrate, and transforming whole plot to fit
 
 import atexit
@@ -176,7 +175,7 @@ class Options:
                 val = fmtDist(val) + ' ' + options.units
             r += f"'{key}': {val}, "
         return r + "}"
-    def set (self, sourceDict):
+    def setFromOptions (self, sourceDict):
         # set options from a dictionary
         for key, val in sourceDict.items():
             self.__dict__[key] = val
@@ -357,13 +356,12 @@ def loadConfig (args, showOutput=True):
         print("options:", options)
         return
     optionsChanged = False
-    # NOT NEEDED -- once on startup is enough.   options = Options() # set to hard-coded defaults
     # Gather the rest of the args into a single string
     filename = argsToFileName(args)
     if filename:
         try:
             config_dict = acutils.load_config(filename)
-            options.set(config_dict)
+            options.setFromOptions(config_dict)
             optionsChanged = True
             print(f"config file '{filename}' loaded")
         except SystemExit as err:
@@ -387,7 +385,7 @@ def setOutputFilename (args):
 
 # Save the current options.
 # NOTE: some options e.g. 'mode' will just save the last value used,
-# e.g. if last command was 'align', the mode will be save as 'align'.
+# e.g. if last command was 'align', the mode will be saved as 'align'.
 def saveConfig (args):
     if len(args) == 0:
         filename = defaultConfigFile
@@ -475,18 +473,38 @@ def getRange (optName, low, high, oldValue, args):
         return oldValue
     return value
 
-def getBool (optName, oldValue, args):
+# Get a boolean value from user input
+def getBool (default, string):
+    if string:
+        value = string.lower()
+        v0 = value[0]
+        if v0 == 'y' or v0 == 't' or v0 == '1' or value == 'on':
+            return True
+        if v0 == 'n' or v0 == 'f' or v0 == '0' or value == 'off':
+            return False
+    print(f"Can't get yes/no or true/false or on/off value from '{string}'.  Assuming you meant '{default}'")
+    return default
+
+# New version: always print the new value if setting it
+def setBool (optName, args):
+    oldValue = getattr(options, optName)
     if len(args) == 0 or len(args[0]) == 0:
-        print(oldValue)
-        return
+        print(f"{optName} {oldValue}")
+        return 
     value = args[0].lower()  # ignore other args
     v0 = value[0]
+    goodValue = None
     if v0 == 'y' or v0 == 't' or v0 == '1' or value == 'on':
-        return True
+        goodValue = True
     if v0 == 'n' or v0 == 'f' or v0 == '0' or value == 'off':
-        return False
-    print(f"{optName}: can't get yes/no or true/false or on/off value from '{value}'")
-    return oldValue
+        goodValue = False
+    if goodValue == None:
+        print(f"{optName}: can't get yes/no or true/false or on/off from '{value}'")
+        return oldValue
+    setattr(options, optName, goodValue)
+    newValue = getattr(options, optName)
+    print(f"{optName} {newValue}")
+    return newValue    # FIXME not needed?
 
 def getFloat (string):
     try:
@@ -578,7 +596,7 @@ def registerXY():
                 showMove("r")
     printMsg("done registering")
     reply = input("Set home? y/n: ")
-    if getBool("sethome", False, [reply]):
+    if getBool(False, [reply]):
         setHome()
 
 def setHome ():
@@ -764,7 +782,7 @@ def align ():
     plotRun()
     print("Head can now be moved manually.")
     reply = input("Is the head at the origin (0,0)? y/n: ")
-    aligned = getBool("align", False, [reply])
+    aligned = getBool(False, reply)
     if aligned:
         alignX = 0.0
         alignY = 0.0
@@ -823,7 +841,7 @@ ad.plot_setup()                 # Go into plot mode and create ad.options
 # Copy initial ad.options into local options
 options.setFromParams(ad.params.__dict__)
 # User options override params:
-options.set(ad.options.__dict__)
+options.setFromOptions(ad.options.__dict__)
 
 if len(sys.argv[1:]) == 0:
     # Load default config file
@@ -934,15 +952,15 @@ while True:
     elif shortCmd == "cp":
         options.copies = getRange("copies", 0, 9999, options.copies, args)
     elif shortCmd == "rd":
-        options.random_start = getBool("random", options.random_start, args)
+        setBool("random_start", args)
     elif shortCmd == "rp":
-        options.report_time = getBool("report_time", options.report_time, args)
+        setBool("report_time", args)
     elif shortCmd == "rl":
-        options.report_lifts = getBool("report_lifts", options.report_lifts, args)
+        setBool("report_lifts", args)
     elif shortCmd == "cs":
-        options.const_speed = getBool("const", options.const_speed, args)
+        setBool("const_speed", args)
     elif shortCmd == "au":
-        options.auto_rotate = getBool("auto", options.auto_rotate, args)
+        setBool("auto_rotate", args)
     elif shortCmd == "rg":
         registerXY()
     elif shortCmd == "po":
