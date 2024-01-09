@@ -19,8 +19,7 @@
 #   for display and input if required.
 
 # TODO
-# * various places: return None for err, not ""   Which is better in Python?
-# * when setting an option, confirm the new value (esp. with a distance) -- requires lots of changes
+# * ? use setattr/getattr instead of going via __dict__ in various places?
 # * abort in middle of plot - see https://github.com/evil-mad/axidraw/issues/75
 #   - pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
 #     derive its name from .svg filename to allow auto resume
@@ -36,7 +35,9 @@
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
 #   - otherwise saved config will become a meaningless jumble.
 # * turn motors off after a delay (or does the firmware do that?)
+# * stream SVG file to plotter instead of ... the library handles all that.
 # * fancy dialling in of 2 or 3 points on the substrate, and transforming whole plot to fit
+# * "dist" never gets changed -- remove from visible options?
 
 import atexit
 from datetime import datetime
@@ -59,7 +60,7 @@ alignY = None
 outputFilename = 'none'
 
 # 'Constants'
-version = "0.1.2"   # adrepl version
+version = "0.1.3"   # adrepl version
 configDir = "~/.config/adrepl/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -67,8 +68,6 @@ histFile = "history.txt"
 defaultHistFile = os.path.expanduser(os.path.join(configDir, histFile))
 histFileSize = 1000
 origDir = os.getcwd()
-minX = 0.0
-minY = 0.0
 # max values depend on model -- these numbers from standard axidraw_conf.py:
 # model 1:
 # x_travel_default = 11.81 # AxiDraw V2, V3, SE/A4: X.    Default: 11.81 in (300 mm)
@@ -451,27 +450,28 @@ def getInt (string):
 
 def get1Int (args):
     if len(args) != 1:
-        return None, "need one whole number"
-    f, err = getInt(args[0])
+        return ' '.join(args), "need one whole number"
+    i, err = getInt(args[0])
     if err:
-        return None, err
-    return f, ""
+        return args[0], err
+    return i, ""
 
-# Get a value within a range: return the new value,
-# or the old value if the new one is invalid.
-def getRange (optName, low, high, oldValue, args):
-    #print(f"getRange({optName},{low},{high},{oldValue},{args} len={len(args)})")
+def setRangeInt (optName, low, high, args):
+    oldValue = getattr(options, optName)
+    #print(f"setRange({optName},{low},{high},{oldValue},{args} len={len(args)})")
     if len(args) == 0:
-        print(oldValue)
-        return oldvalue
-    value, err = get1Float(args)    # FIXME float or int?
+        print(f"{optName} {oldValue}")
+        return
+    value, err = get1Int(args)
     if err:
-        print(f"{optName}: invalid value")
-        return oldValue
+        print(f"{optName}: invalid value '{value}'.  Need a single whole number")
+        return 
     if value < low or value > high:
-        print(f"{optName}: value out of range ({low} - {high})")
-        return oldValue
-    return value
+        print(f"{optName}: value '{value}' out of range ({low} - {high})")
+        return
+    setattr(options, optName, value)
+    newValue = getattr(options, optName)
+    print(f"{optName} {newValue}")
 
 # Get a boolean value from user input
 def getBool (default, string):
@@ -500,7 +500,7 @@ def setBool (optName, args):
         goodValue = False
     if goodValue == None:
         print(f"{optName}: can't get yes/no or true/false or on/off from '{value}'")
-        return oldValue
+        return
     setattr(options, optName, goodValue)
     newValue = getattr(options, optName)
     print(f"{optName} {newValue}")
@@ -515,10 +515,10 @@ def getFloat (string):
 
 def get1Float (args):
     if len(args) != 1:
-        return None, "need one number"
+        return "", "need one number"
     f, err = getFloat(args[0])
     if err:
-        return None, err
+        return args[0], err
     return f, ""
 
 def getDist (args):
@@ -749,32 +749,11 @@ def plotFile (args, preview=False):
 def manual (cmd):
     options.mode = "manual"
     options.manual_cmd = cmd
-    plotRun()   #ad.plot_run()
+    plotRun()
 
-def setModel (args):
-    oldM = options.model
-    if len(args) == 0:
-        print(f"model is {oldM}")
-        return
-    m, err = get1Int(args)
-    if err:
-        print(err)
-        return
-    if m < 1 or m > 7:
-        print("need a model number between 1 and 7")
-        return
-    if m == oldM:
-        print(f"model remains at {oldM}")
-    else:
-        options.model = m
-        print(f"model changed from {oldM} to {m}")
-
-def set1Int (option, args):
-    val, err = get1Int(args)
-    if err:
-        print(err)
-    else:
-        option = val
+def setModel(args):
+    setRangeInt("model", 1, 7, args)
+    print(f"Plot size is {fmtDist(xTravel[options.model])} by {fmtDist(yTravel[options.model])} {options.units}")
 
 def align ():
     global aligned, alignX, alignY
@@ -904,7 +883,7 @@ while True:
     elif shortCmd == "fw":
         manual("fw_version")
     elif shortCmd == "hi":
-        options.hiding = getBool("hiding", options.hiding, args)
+        setBool("hiding", args)
     elif shortCmd == "up":
         manual("raise_pen")
     elif shortCmd == "do":
@@ -926,31 +905,31 @@ while True:
     elif shortCmd == "mo":
         setModel(args)
     elif shortCmd == "sd":
-        options.speed_pendown = getRange("speeddown", 1, 100, options.speed_pendown, args)
+        setRangeInt("speed_pendown", 1, 100, args)
     elif shortCmd == "su":
-        options.speed_penup = getRange("speedup", 1, 100, options.speed_penup, args)
+        setRangeInt("speed_penup", 1, 100, args)
     elif shortCmd == "ac":
-        options.accel = getRange("accel", 1, 100, options.accel, args)
+        setRangeInt("accel", 1, 100, args)
     elif shortCmd == "pd":
-        options.pen_pos_down = getRange("posdown", 0, 100, options.pen_pos_down, args)
+        setRangeInt("pen_pos_down", 0, 100, args)
     elif shortCmd == "pu":
-        options.pen_pos_up = getRange("posup", 0, 100, options.pen_pos_up, args)
+        setRangeInt("pen_pos_up", 0, 100, args)
     elif shortCmd == "pl":
-        options.pen_rate_lower = getRange("ratedown", 1, 100, options.pen_rate_lower, args)
+        setRangeInt("pen_rate_lower", 1, 100, args)
     elif shortCmd == "pr":
-        options.pen_rate_raise = getRange("rateup", 1, 100, options.pen_rate_raise, args)
+        setRangeInt("pen_rate_raise", 1, 100, args)
     elif shortCmd == "dd":
-        options.pen_delay_down = getRange("delaydown", 0, 10000, options.pen_delay_down, args)
+        setRangeInt("pen_delay_down", 0, 10000, args)
     elif shortCmd == "du":
-        options.pen_delay_up = getRange("delayup", 0, 10000, options.pen_delay_up, args)
+        setRangeInt("pen_delay_up", 0, 10000, args)
     elif shortCmd == "dp":
-        options.page_delay = getRange("pagedelay", 0, 10000, options.pagedelay, args)
+        setRangeInt("page_delay", 0, 10000, args)
     elif shortCmd == "rn":
-        options.rendering = getRange("rendering", 0, 3, options.rendering, args)
+        setRangeInt("rendering", 0, 3, args)
     elif shortCmd == "ro":
-        options.reordering = getRange("reordering", 0, 4, options.reordering, args)
+        setRangeInt("reordering", 0, 4, args)
     elif shortCmd == "cp":
-        options.copies = getRange("copies", 0, 9999, options.copies, args)
+        setRangeInt("copies", 0, 9999, args)
     elif shortCmd == "rd":
         setBool("random_start", args)
     elif shortCmd == "rp":
