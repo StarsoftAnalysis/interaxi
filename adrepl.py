@@ -24,12 +24,12 @@
 #   - pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
 #     derive its name from .svg filename to allow auto resume
 #   - currently ctrl-C aborts plot and adrepl
-#* FIXME: plot ends at 270,0 instead of 0,0 ??
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
 #   - simplify model
 # * interactive mode for some things??
-# * loop to print many copies -- rather than built-in copy thing.
+# * loop to print many copies -- rather than built-in copy thing. i.e. ignore copies in options -- don't tell ad about it, make sure it's always 1
+#   -- pause between coppies.  beep?
 # * maybe: check ad.errors.code at end of REPL (after every command)
 # * cmd to draw a reg mark
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
