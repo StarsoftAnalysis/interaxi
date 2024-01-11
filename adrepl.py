@@ -19,11 +19,7 @@
 #   for display and input if required.
 
 # TODO
-# * ? use setattr/getattr instead of going via __dict__ in various places?
-# * abort in middle of plot - see https://github.com/evil-mad/axidraw/issues/75
-#   - pause/resume (capture Ctrl-C while plotting??) -- output to plob etc. -- store temp file somewhere standard; 
-#     derive its name from .svg filename to allow auto resume
-#   - currently ctrl-C aborts plot and adrepl
+# * ? use setattr/getattr instead of going via __dict__ in various places?  -- didn't work.
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
 #   - simplify model
@@ -58,9 +54,10 @@ aligned = False     # True if we know where the head is.
 alignX = None       # Head position if aligned in inches.
 alignY = None
 outputFilename = 'none'
+plotRunning = False # True while plotting a file
 
 # 'Constants'
-version = "0.1.3"   # adrepl version
+version = "0.1.4"   # adrepl version
 configDir = "~/.config/adrepl/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -402,8 +399,13 @@ def saveConfig (args):
         print("Unable to save configuration:", err)
 
 def handleSigint (*args):
-    print("\ndone (Ctrl-C pressed)")
-    quit()
+    if plotRunning:
+        # Just stop the plot
+        print("\nPlot running -- to cancel it, press the button on the plotter")
+    else:
+        # Quit from the REPL
+        print("\ndone (Ctrl-C pressed)")
+        quit()
 
 # Apply local options, and then call plot_run()
 def plotRun (inputFilename=None):
@@ -419,7 +421,7 @@ def plotRun (inputFilename=None):
     if inputFilename and outputFilename != 'none':
         # Send plot output to a file
         if outputFilename == 'auto':
-            ofn = inputFilename + '.svg'   # FIXME
+            ofn = inputFilename + '.svg'   # FIXME could ad 'plob' if --digest value says so
         else:
             ofn = outputFilename
         print(f"{inputFilename=}  {outputFilename=}  {ofn=}")
@@ -706,6 +708,8 @@ def plotFile (args, preview=False):
     if len(args) == 0:
         print(f"{cmdName}: need one filename (and optional layer prefix)")
         return
+    global plotRunning
+    plotRunning = True
     # Gather the rest of the args into a single string
     filename = argsToFileName(args)
     try:
@@ -743,7 +747,11 @@ def plotFile (args, preview=False):
             options.report_lifts = oldRL
     except RuntimeError as err:
         # Error msg has already been printed
+        print(f"plotFile exception")
         pass
+    finally:
+        print(f"plotting completed")
+        plotRunning = False
 
 # simple manual commands
 def manual (cmd):
@@ -835,6 +843,7 @@ else:
 # and we use it a bit differently (see plotFile()).
 options.preview = False
 
+# Get user to check position of pen
 align()
 
 loadHistory()
