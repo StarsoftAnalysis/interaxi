@@ -1,4 +1,4 @@
-# adrepl
+# interaxi
 
 A simple [REPL](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop) console for AxiDraw.
 
@@ -6,15 +6,15 @@ I've found that running AxiDraw commands from the command line is slow,
 especially on an old Raspberry Pi B+,
 so I wrote this wrapper using the Python API.
 
-Run ```adrepl.py``` or ```python adrepl.py```, and then 
+Run ```interaxi.py``` or ```python interaxi.py```, and then 
 follow the prompts and enter commands to control the plotter.
 
-By default, adrepl.py reads its initial configuration from `<homedir>/.config/adrepl/axidraw_conf.py`.  
+By default, interaxi.py reads its initial configuration from `<homedir>/.config/interaxi/axidraw_conf.py`.  
 An alternative configuration file can be given on the command line, e.g.
 ```
-adrepl.py special_conf.py
+interaxi.py special_conf.py
 ```
-Configurations can also be loaded from within adrepl using the `config` or `options` commands.
+Configurations can also be loaded from within interaxi using the `config` or `options` commands.
 
 ## Commands
 
@@ -28,7 +28,7 @@ Yes/No options turn a setting on or off.  They can be specified with any of 'yes
 Set the acceleration to a value from 1 to 100.
 ### `align`
 Run the align command, which disengages the plotter's motors and allows the head to be manually moved -- usually to the origin.
-`adrepl` asks if you have moved the head to the origin, so that it can then keep track of movements and prevent the
+`interaxi` asks if you have moved the head to the origin, so that it can then keep track of movements and prevent the
 head from moving out of range.
 ### `auto_rotate <y/n>`
 Turn auto-rotate on or off.  If on, the plot may be rotated to make sure that it fits on the plotting area.
@@ -95,7 +95,7 @@ Set the up position of the pen (as a percentage of the total travel of the servo
 Run the plot in preview mode -- the pen will not move, but the estimated time will be reported.
 This will also create an output file if you have set an output file name.
 ### `quit` | `Ctrl-C` | `Ctrl-D`
-Leave `adrepl`.  The current configuration will not be saved automatically.
+Leave `interaxi`.  The current configuration will not be saved automatically.
 ### `random_start <y/n>`
 Turn the random start feature on or off.
 ### `ratedown|pen_rate_lower <1-100>`
@@ -123,7 +123,7 @@ unless an output file name has been specified.
 Turn plot reporting on or off.
 ### `save [<filename>]`
 Save the current configuration (aka options) to the specified file.  If no file name is given,
-use the default name (`~/.config/adrepl/axidraw_config.py`).
+use the default name (`~/.config/interaxi/axidraw_config.py`).
 ### `speeddown|speed_pendown|sd <1-100>`
 Set the plotting speed when the pen is down, as a percentage of the maximum.
 ### `speedup|speed_penup|su <1-100>`
