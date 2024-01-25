@@ -1,12 +1,53 @@
 # interaxi
 
-A simple [REPL](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop) console for AxiDraw.
+A simple [REPL](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop) console for [AxiDraw plotters](https://axidraw.com/).
 
-I've found that running AxiDraw commands from the command line is slow,
-especially on an old Raspberry Pi B+,
-so I wrote this wrapper using the Python API.
+I've found that running AxiDraw commands from the command line is slow
+and (to me) awkward because of the way modes and commands are structured.
 
-Run ```interaxi.py``` or ```python interaxi.py```, and then 
+So I wrote this wrapper using the Python API, which gives a simple command-line
+interface to an AxiDraw plotter.
+
+A typical session might look like this:
+
+```
+$ interaxi.py 
+config file '/home/chris/.config/interaxi/axidraw_conf.py' loaded
+new options: {'accel': 75, 'auto_rotate': True, 'const_speed': False, 'copies': 1, 'digest': 0, 'dist': 1.0, 'hiding': False, 'ids': [], 'layer': None, 'manual_cmd': enable_xy, 'margin': 0.4, 'min_gap': 0.35 mm, 'mode': manual, 'model': 2, 'no_rotate': False, 'page_delay': 15, 'paper': A4L, 'pen_delay_down': 0, 'pen_delay_up': 0, 'pen_pos_down': 30, 'pen_pos_up': 60, 'pen_rate_lower': 50, 'pen_rate_raise': 75, 'penlift': 1, 'port': None, 'port_config': 0, 'preview': False, 'random_start': False, 'rendering': 3, 'reordering': 2, 'report_lifts': True, 'report_time': True, 'resolution': 1, 'resume_type': plot, 'selected_nodes': [], 'setup_type': align, 'speed_pendown': 25, 'speed_penup': 75, 'submode': none, 'units': mm, 'webhook': False, 'webhook_url': None, }
+Head can now be moved manually.
+Is the head at the origin (0,0)? y/n: y
+> reorder 2
+reordering 2
+> model 2
+model 2
+Plot size is 430.02 by 296.93 mm
+> plot circ.svg
+plotting file 'circ.svg'
+Plot paused by button press.
+
+(Paused after: 49.055 mm of pen-down travel.)
+Use the resume feature to continue.
+
+Elapsed time: 1.811 Seconds
+Length of path drawn: 0.05 m
+Total distance moved: 0.10 m
+
+Number of pen lifts: 1
+
+Type 'r' to resume or 'c' to cancel: r
+resuming file '/tmp/tmplf93tfpt.svg' layer None
+Elapsed time: 3.711 Seconds
+Length of path drawn: 0.19 m
+Total distance moved: 0.24 m
+
+Number of pen lifts: 1
+
+> q
+done
+$ 
+```
+
+Run `interaxi.py` or `python interaxi.py`, and then 
 follow the prompts and enter commands to control the plotter.
 
 By default, interaxi.py reads its initial configuration from `<homedir>/.config/interaxi/axidraw_conf.py`.  
