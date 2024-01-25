@@ -23,21 +23,24 @@
 #   - simplify model
 # * interactive mode for some things??
 # * loop to print many copies -- rather than built-in copy thing. i.e. ignore copies in options -- don't tell ad about it, make sure it's always 1
-#   -- pause between coppies.  beep?
-# * maybe: check ad.errors.code at end of REPL (after every command)
+#   -- pause between copies.  beep?
 # * cmd to draw a reg mark
 # * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
 #   - otherwise saved config will become a meaningless jumble.
 # * turn motors off after a delay (or does the firmware do that?)
-# * stream SVG file to plotter instead of ... the library handles all that.
 # * fancy dialling in of 2 or 3 points on the substrate, and transforming whole plot to fit
 # * "dist" never gets changed -- remove from visible options?
+# * exclude replies (y/n, r/c, maybe reg arrows) from history
+# * warn if we're going to overwrite an existing file when renaming temp output
+# * maybe an option to disable output creation and therefore restarting
 
 import atexit
 from datetime import datetime
 import os
+import pathlib
 import signal
 import sys
+import tempfile
 # Use readline if available:
 try:
     import readline
@@ -47,16 +50,8 @@ from curtsies  import Input
 from pyaxidraw import axidraw
 from axicli    import utils as acutils
 
-# Globals:
-ad = None           # AxiDraw object
-aligned = False     # True if we know where the head is.
-alignX = None       # Head position if aligned in inches.
-alignY = None
-outputFilename = 'none'
-plotRunning = False # True while plotting a file
-
 # 'Constants'
-version = "0.1.5"   # adrepl version
+version = "0.1.7"   # adrepl version
 configDir = "~/.config/adrepl/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -88,10 +83,18 @@ origDir = os.getcwd()
 # y_travel_V3B6 = 5.51     # AxiDraw V3/B6: Y             Default: 5.51 in (140 mm)
 xTravel = [None, 11.81, 16.93, 23.42, 6.30, 34.02, 23.39,  7.48]
 yTravel = [None,  8.58, 11.69,  8.58, 4.00, 23.39, 17.01,  5.51]
-
 # Distances for registration moves -- sensible numbers in each set of units
 regDistances = {"mm": {"f": 0.1  , "m": 1   , "c": 10  },
                 "in": {"f": 0.005, "m": 0.05, "c":  0.5}}
+noOutputFile = 'none'
+autoOutputFile = 'auto'
+
+# Globals:
+aligned = False     # True if we know where the head is.
+alignX = None       # Head position if aligned in inches.
+alignY = None
+outputFilename = noOutputFile
+plotRunning = False # True while plotting a file -- used for sigint trap
 
 def maxX ():  # inches
     try:
@@ -200,6 +203,7 @@ cycle, \
 delaydown|pen_delay_down <ms>, \
 delaypage|page_delay <s>, \
 delayup|pen_delay_up <ms>, \
+digest <0|1|2>, \
 down|lower_pen, \
 fw_version, \
 help, \
@@ -252,6 +256,7 @@ cmdList = [
     ("delaydown", "dd"),
     ("delaypage", "dp"),
     ("delayup", "du"),
+    ("digest", "dg"),
     ("disable_xy", "of"),
     ("down", "do"),
     ("enable_xy", "on"),
@@ -371,12 +376,16 @@ def loadConfig (args, showOutput=True):
 def setOutputFilename (args):
     global outputFilename
     if len(args) == 0:
-        print(outputFilename)
+        print(f"output {outputFilename}")
         return
     outputFilename = args[0]
-    if outputFilename == 'none':
+    if noOutputFile.startswith(outputFilename.lower()):
+        outputFilename = noOutputFile
+    elif autoOutputFile.startswith(outputFilename.lower()):
+        outputFilename = autoOutputFile
+    if outputFilename == noOutputFile:
         print("Plot output will not be saved")
-    elif outputFilename == 'auto':
+    elif outputFilename == autoOutputFile:
         print("Plot output file name will be chosen automatically")
     else:
         print(f"Plot output will be saved as '{outputFilename}'")
@@ -403,14 +412,19 @@ def saveConfig (args):
 def handleSigint (*args):
     if plotRunning:
         # Just stop the plot
-        print("\nPlot running -- to cancel it, press the button on the plotter")
+        print("\nPlot running -- to pause or cancel it, press the button on the plotter")
     else:
         # Quit from the REPL
         print("\ndone (Ctrl-C pressed)")
         quit()
 
 # Apply local options, and then call plot_run()
-def plotRun (inputFilename=None):
+# Returns 0 if OK, else an error code
+def plotRun (inputFn = None, outputFn = None):
+
+    ad = axidraw.AxiDraw()
+    ad.plot_setup(inputFn)     # inputFn may be None
+    # Apply all the options
     for key, value in options.__dict__.items():
         if key in ['min_gap', 'report_lifts']:
             # 'additional' option -- see https://axidraw.com/doc/py_api/#additional-parameters
@@ -419,23 +433,31 @@ def plotRun (inputFilename=None):
             # 'normal' option
             ad.options.__dict__[key] = value
     #print(f"Running with options {options}")
-    #print(f"{inputFilename=}  {outputFilename=}")
-    if inputFilename and outputFilename != 'none':
-        # Send plot output to a file
-        if outputFilename == 'auto':
-            ofn = inputFilename + '.svg'   # FIXME could ad 'plob' if --digest value says so
-        else:
-            ofn = outputFilename
-        print(f"{inputFilename=}  {outputFilename=}  {ofn=}")
-        try:
-            with open(ofn, "w") as outputFile:
-                outputFile.write(ad.plot_run(True))
-        except PermissionError as err:
-            print(f"Unable to create output file {ofn}: {err}")
-            return
-    else:
-        # Not using plot output
+
+    if not outputFn:
+        # not plotting a file
+        #try:
         ad.plot_run()
+        return ad.errors.code
+        # what exceptions can occur here?
+        #except lxml.etree.XMLSyntaxError as err:
+        #    print(f"Nasty SVG 3: {err}")
+        #    return 3
+
+    # Plotting or previewing an SVG file:
+    try:
+        with open(outputFn, "w") as outputFile:
+            outputFile.write(ad.plot_run(True))
+        return ad.errors.code
+    except PermissionError as err:
+        print(f"plotRun: unable to create output file {ofn}: {err}")
+        return 1
+    #except lxml.etree.XMLSyntaxError as err:
+    #    print(f"Nasty SVG 2: {err}")
+    #    return 2
+    # maybe: except RuntimeError as err:
+
+    return 0
 
 def parse (line):
     tokens = line.split()
@@ -537,14 +559,13 @@ def getDist (args):
     return d, ""
 
 def setMinGap (args):
-    if len(args) == 0:
-        print(f"{fmtDist(options.min_gap)} {options.units}") 
-        return
-    dist, err = getDist(args)
-    if err:
-       printf(err)
-       return
-    options.min_gap = dist
+    if len(args) > 0:
+        dist, err = getDist(args)
+        if err:
+           print(err)
+           return
+        options.min_gap = dist
+    print(f"{fmtDist(options.min_gap)} {options.units}") 
     return
 
 # Allow fine tuning of position using arrow keys.
@@ -600,7 +621,7 @@ def registerXY():
                 showMove("r")
     printMsg("done registering")
     reply = input("Set home? y/n: ")
-    if getBool(False, [reply]):
+    if getBool(False, reply):
         setHome()
 
 def setHome ():
@@ -667,7 +688,7 @@ def walk (xy, args):
                 return
     options.walk_dist = dist     # for pre-3.8 software
     options.dist = dist
-    plotRun()
+    rc = plotRun()
     #print(f"NOT RUNNING -- would have walked {dist} {xy}")
 
 def walkHome ():
@@ -690,76 +711,127 @@ def argsToFileName (args):
     filename = os.path.expanduser(filename.strip(" \"'\t\r\n"))
     return filename
 
-def plotFile (args, preview=False):
-    cmdName = "preview" if preview else "plot"
+# Get a filename and optional layer number.
+# args will be |"filename.svg"| or |"filename.svg" "3"| or |"long" "file" "name.svg" "2"| etc.
+# If filename has spaces, we need to stick it back together.
+def getFilenameAndLayer (cmdName, args):
     layer = None
-    # args will be |"filename.svg"| or |"filename.svg" "3"| or |"long" "file" "name.svg" "2"| etc.
-    # If filename has spaces, we need to stick it back together.
     if len(args) > 1:
         # Use last arg as layer number if it's numeric
         layer, err = getInt(args[-1])
-        if err:
-            # Not numeric -- take it as part of the filename
-            pass
-        else:
+        if not err:
             if layer < 0 or layer > 1000:
                 print(f"{cmdName}: layer must be a whole number between 0 and 1000", err)
-                return
-            # Numeric layer 
+                return "", 0
             args.pop()
     if len(args) == 0:
         print(f"{cmdName}: need one filename (and optional layer prefix)")
-        return
+        return "", 0
+    return argsToFileName(args), layer
+
+# Plot or preview an SVG file, with loop to deal with pause/resume
+def plotFile (args, preview=False):
+    cmdName = "preview" if preview else "plot"
+    inputFilename, layer = getFilenameAndLayer(cmdName, args)
+
     global plotRunning
     plotRunning = True
-    # Gather the rest of the args into a single string
-    filename = argsToFileName(args)
-    try:
-        if layer is not None:
+
+    # NOTE: The input file name has already been set via ad.plot_setup(filename).
+    # It's only need here to generate an automatic outpuf file name.
+    # That seems to mean that it doesn't matter if we resume
+    # ...but how does it work if I'm not changing the input file?
+    # Plotting a file: if there's an outputFilename, output will go that.
+    # Else, send output to a temp file in case restart is required.
+    # via the with.. just below.
+    #print(f"{inputFilename=}  {outputFilename=}")
+
+    infn = inputFilename
+    outfn = None
+    prevOutfn = None
+    plotCancelled = False
+    while True:     # until completed or cancelled
+        prevOutfn = outfn
+        # Set up for the input file, and apply options
+        if outfn != None:
+            #print(f"Time to delete previous {outfn=} ?  NO!!!! outfn=infn")
+            # Not the first time round the loop, so we're resuming
+            options.mode = "res_plot"
+            print(f"resuming file '{infn}' layer {layer}")
+        elif layer is not None:
             options.mode = "layers"
-            print(f"plotting file '{filename}' layer {layer}")
+            print(f"plotting file '{infn}' layer {layer}")
         else:
             options.mode = "plot"
-            print(f"plotting file '{filename}'")
-        options.layer = layer    # even if it's None
-        ad.plot_setup(filename) # This changes ad.options
+            print(f"plotting file '{infn}'")
+        options.layer = layer   # even if it's None
+        # now in plotRun   ad.plot_setup(infn)     # This changes ad.options
         oldRT = options.report_time
         oldRL = options.report_lifts
         if preview:
-            # Always do these for previews
             options.preview = True
+            # Always do these for previews
             options.report_time = True
             options.report_lifts = True
-        plotRun(filename)   # This re-applies local options to ad.options
-        if ad.errors.code == 0:
-            ## The report will already have been printed,
-            ## but these values are now available to use:
-            #if oldRT: 
-            #    time_elapsed = ad.time_elapsed
-            #    time_estimate = ad.time_estimate 
-            #    dist_pen_down = ad.distance_pendown
-            #    dist_pen_total = ad.distance_total
-            #    pen_lifts = ad.pen_lifts
-            pass
-        else:
-            print("plotting failed, error", ad.errors.code)
-        if preview :
+        # Always send output to temp file (see below re saving it)
+        ofh, outfn = tempfile.mkstemp(suffix='.svg', text=True)
+        # ?? ofh.close() # just need the name
+        rc = plotRun(infn, outfn)   # This re-applies local options to ad.options
+        if preview:
             options.preview = False
             options.report_time = oldRT
             options.report_lifts = oldRL
-    except RuntimeError as err:
-        # Error msg has already been printed
-        print(f"plotFile exception")
-        pass
-    finally:
-        print(f"plotting completed")
-        plotRunning = False
+        if infn != inputFilename:
+            # input was a temporary file -- delete it
+            pathlib.Path(infn).unlink(missing_ok = True)
+        if rc == 102:
+            # user pressed the button -- may want to restart
+            cmd = ''
+            while not cmd in ['r', 'c']:
+                reply = input("\nType 'r' to resume or 'c' to cancel: ").lower()
+                if reply:
+                    cmd = reply[0]
+            if cmd == 'c':
+                plotCancelled = True
+                walkHome()
+                break
+            # previous outputfile is the input for the next go (it contains the restart position)
+            infn = outfn
+        elif rc > 0:
+            print(f"{cmdName}: giving up -- got {rc=}   temp files not deleted")
+            plotRunning = False
+            return 
+        else:
+            # no pause -- plot is complete
+            break
+    # end of while True
+
+    if plotCancelled or outputFilename == noOutputFile:
+        # Cancelled, or user didn't ask for an output file -- delete it
+        pathlib.Path(outfn).unlink(missing_ok = True)
+    else:
+        # Rename / move the temp output to a permanent file
+        if outputFilename == autoOutputFile:
+            infix = '.plob' if options.digest > 0 else '.out'
+            ofn = f"{pathlib.Path(inputFilename).stem}{infix}.svg"
+        else:
+            ofn = outputFilename
+        try:
+            os.replace(outfn, ofn)
+            print(f"{cmdName}: output file saved as '{ofn}")
+        except OSError as err:
+            print(f"{cmdName}: unable to rename '{ofn}' -- it has been kept as '{outfn}'")
+
+    plotRunning = False
+
+def previewFile():
+    pass
 
 # simple manual commands
 def manual (cmd):
     options.mode = "manual"
     options.manual_cmd = cmd
-    plotRun()
+    rc = plotRun()
 
 def setModel(args):
     setRangeInt("model", 1, 7, args)
@@ -768,7 +840,7 @@ def setModel(args):
 def align ():
     global aligned, alignX, alignY
     options.mode = "align"
-    plotRun()
+    rc = plotRun()
     print("Head can now be moved manually.")
     reply = input("Is the head at the origin (0,0)? y/n: ")
     aligned = getBool(False, reply)
@@ -820,15 +892,9 @@ def ls ():
 def restoreCWD ():
     os.chdir(origDir)
 
-##########################################################################################
-
-def main():
-
-    signal.signal(signal.SIGINT, handleSigint)
-
-    # Setup
-    global ad
-    ad = axidraw.AxiDraw()          # Initialize class
+def initOptions ():
+    # Setup options from AD's default config and our own config files
+    ad = axidraw.AxiDraw()
     ad.plot_setup()                 # Go into plot mode and create ad.options
     # Copy initial ad.options into local options
     options.setFromParams(ad.params.__dict__)
@@ -840,13 +906,19 @@ def main():
         loadConfig([defaultConfigFile], True)
     else:
         # Load config files from command line 
-        # (one at a time because that's how loadConfig works)
         for arg in sys.argv[1:]:
             loadConfig(arg, True)
-
     # Make sure preview option is not set -- it interferes with some modes,
     # and we use it a bit differently (see plotFile()).
     options.preview = False
+
+##########################################################################################
+
+def main():
+
+    signal.signal(signal.SIGINT, handleSigint)
+
+    initOptions()
 
     # Get user to check position of pen
     align()
@@ -874,18 +946,18 @@ def main():
             break   # out of the while loop
         elif shortCmd == "cy":
             options.mode = "cycle"
-            plotRun()
+            rc = plotRun()
         elif shortCmd == "al":
             align()
         elif shortCmd == "vr":
             options.mode = "version"
-            plotRun()
+            rc = plotRun()
         elif shortCmd == "sy":
             options.mode = "sysinfo"
-            plotRun()
+            rc = plotRun()
         elif shortCmd == "tg":
             options.mode = "toggle"
-            plotRun()
+            rc = plotRun()
         elif shortCmd == "un":
             setUnits(args)
         elif shortCmd == "wx":
@@ -911,7 +983,7 @@ def main():
         elif shortCmd == "pt":
             plotFile(args)
         elif shortCmd == "pv":
-            plotFile(args, True)
+            previewFile(args)
         elif shortCmd == "op":
             loadConfig(args)
         elif shortCmd == "ou":
@@ -936,6 +1008,8 @@ def main():
             setRangeInt("pen_delay_down", 0, 10000, args)
         elif shortCmd == "du":
             setRangeInt("pen_delay_up", 0, 10000, args)
+        elif shortCmd == "dg":
+            setRangeInt("digest", 0, 2, args)
         elif shortCmd == "dp":
             setRangeInt("page_delay", 0, 10000, args)
         elif shortCmd == "rn":
