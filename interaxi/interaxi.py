@@ -1,5 +1,7 @@
-# adrepl -- AxiDraw frontend.
+# interaxi -- interactive AxiDraw frontend.
 # A simple REPL for controlling the AxiDraw
+
+# (previously called adrepl)
 
 # Issues:
 # * With old (pre 3.8?) software, 'dist' was spelled 'walk_dist' --
@@ -51,8 +53,8 @@ from pyaxidraw import axidraw
 from axicli    import utils as acutils
 
 # 'Constants'
-version = "0.1.7"   # adrepl version
-configDir = "~/.config/adrepl/"
+version = "0.2.0"   # interaxi version
+configDir = "~/.config/interaxi/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
 histFile = "history.txt"
@@ -117,7 +119,7 @@ class Options:
         # just to make sure they all have values.
         # Most will get updated from ad.options straight away.
         # Distances are in inches -- as per standard AxiDraw configs.
-        # NOTE: Some options are specific to adrepl -- not standard AxiDraw ones.
+        # NOTE: Some options are specific to interaxi -- not standard AxiDraw ones.
         self.__dict__ = {
             "accel": 75,
             "auto_rotate": True,
@@ -129,13 +131,13 @@ class Options:
             "ids": [],
             "layer": 1,
             "manual_cmd": 'enable_xy',
-            "margin": 0.4,      # distance; adrepl only
+            "margin": 0.4,      # distance; interaxi only
             "min_gap": 0.006,   # distance; additional
             "mode": 'manual',
             "model": 1,
             "no_rotate": False,
             "page_delay": 15,
-            "paper": 'A4L',     # adrepl only
+            "paper": 'A4L',     # interaxi only
             "pen_delay_down": 0,
             "pen_delay_up": 0,
             "pen_pos_down": 30,
@@ -158,7 +160,7 @@ class Options:
             "speed_pendown": 25,
             "speed_penup": 75,
             "submode": 'none',
-            "units": 'in',      # adrepl only
+            "units": 'in',      # interaxi only
             "webhook": False,
             "webhook_url": None,
         }
