@@ -19,11 +19,11 @@
 #   for display and input if required.
 
 # TODO
-# * ? use setattr/getattr instead of going via __dict__ in various places?  -- didn't work.
+# * ignore/don't display unused options: dist, 
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
 #   - simplify model
-# * interactive mode for some things??
+# * interactive mode for some things?? -- easy now that plot_run is used only briefly.
 # * loop to print many copies -- rather than built-in copy thing. i.e. ignore copies in options -- don't tell ad about it, make sure it's always 1
 #   -- pause between copies.  beep?
 # * cmd to draw a reg mark
@@ -35,6 +35,9 @@
 # * exclude replies (y/n, r/c, maybe reg arrows) from history
 # * warn if we're going to overwrite an existing file when renaming temp output
 # * maybe an option to disable output creation and therefore restarting
+# * set margin/paper/plot-size -- can override limits derived from model (but without going beyond the model capabilities)
+#   adjusting for margin and previously set registration -- so the calcs done at plot time.  
+#   Tell user not to worry about AD's warning re part of image being off the edge
 
 import atexit
 from datetime import datetime
@@ -837,13 +840,14 @@ def manual (cmd):
 
 def setModel(args):
     setRangeInt("model", 1, 7, args)
-    print(f"Plot size is {fmtDist(xTravel[options.model])} by {fmtDist(yTravel[options.model])} {options.units}")
+    print(f"Maximum plot size is {fmtDist(xTravel[options.model])} by {fmtDist(yTravel[options.model])} {options.units}")
 
-def align ():
+def align (showMsg = True):
     global aligned, alignX, alignY
     options.mode = "align"
     rc = plotRun()
-    print("Head can now be moved manually.")
+    if showMsg:     # Don't show msg if running via the 'on' command
+        print("Head can now be moved manually.")
     reply = input("Is the head at the origin (0,0)? y/n: ")
     aligned = getBool(False, reply)
     if aligned:
@@ -977,7 +981,7 @@ def main():
         elif shortCmd == "do":
             manual("lower_pen")
         elif shortCmd == "on":
-            manual("enable_xy")
+            align(False);
             print("motors are on")
         elif shortCmd == "of":
             manual("disable_xy")
