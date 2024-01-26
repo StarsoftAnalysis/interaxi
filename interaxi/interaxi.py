@@ -734,9 +734,27 @@ def getFilenameAndLayer (cmdName, args):
         return "", 0
     return argsToFileName(args), layer
 
+# Plot a number of copies
+def plotCopies (args):
+    storedCopies = options.copies
+    options.copies = 1  # Don't need AxiDraw to handle the copies
+    copies = 99999 if storedCopies == 0 else storedCopies
+    for copy in range(1, storedCopies+1):
+        print(f"Copy {copy} of {copies}:")
+        plotFile(args)
+        if copy < storedCopies:
+            reply = input("Press Enter to start next copy (or type 'c' to cancel): ")
+            if reply and reply.lower()[0] == 'c':
+                print(f"Stopping after {copy} copies")
+                break
+    else:
+        print(f"{copy} copies completed")
+    options.copies = storedCopies
+
 # Plot or preview an SVG file, with loop to deal with pause/resume
 def plotFile (args, preview=False):
     cmdName = "preview" if preview else "plot"
+    participle = "previewing" if preview else "plotting"
     inputFilename, layer = getFilenameAndLayer(cmdName, args)
 
     global plotRunning
@@ -765,10 +783,10 @@ def plotFile (args, preview=False):
             print(f"resuming file '{infn}' layer {layer}")
         elif layer is not None:
             options.mode = "layers"
-            print(f"plotting file '{infn}' layer {layer}")
+            print(f"{participle} file '{infn}' layer {layer}")
         else:
             options.mode = "plot"
-            print(f"plotting file '{infn}'")
+            print(f"{participle} file '{infn}'")
         options.layer = layer   # even if it's None
         # now in plotRun   ad.plot_setup(infn)     # This changes ad.options
         oldRT = options.report_time
@@ -828,9 +846,6 @@ def plotFile (args, preview=False):
             print(f"{cmdName}: unable to rename '{ofn}' -- it has been kept as '{outfn}'")
 
     plotRunning = False
-
-def previewFile():
-    pass
 
 # simple manual commands
 def manual (cmd):
@@ -987,9 +1002,9 @@ def main():
             manual("disable_xy")
             print("motors are off")
         elif shortCmd == "pt":
-            plotFile(args)
+            plotCopies(args)
         elif shortCmd == "pv":
-            previewFile(args)
+            plotFile(args, preview=True)
         elif shortCmd == "op":
             loadConfig(args)
         elif shortCmd == "ou":
