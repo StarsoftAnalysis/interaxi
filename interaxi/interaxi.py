@@ -19,25 +19,22 @@
 #   for display and input if required.
 
 # TODO
-# * ignore/don't display unused options: dist, 
+# * ignore/don't display unused options: dist, page_delay?, resume_type, selected_nodes, submode, webhook?
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
 #   - simplify model
 # * interactive mode for some things?? -- easy now that plot_run is used only briefly.
-# * loop to print many copies -- rather than built-in copy thing. i.e. ignore copies in options -- don't tell ad about it, make sure it's always 1
-#   -- pause between copies.  beep?
 # * cmd to draw a reg mark
-# * don't change options such as mode -- e.g. when doing align, restore mode to what it was before,
-#   - otherwise saved config will become a meaningless jumble.
 # * turn motors off after a delay (or does the firmware do that?)
 # * fancy dialling in of 2 or 3 points on the substrate, and transforming whole plot to fit
-# * "dist" never gets changed -- remove from visible options?
-# * exclude replies (y/n, r/c, maybe reg arrows) from history
+# * exclude replies (y/n, r/c, maybe reg arrows) from history -- put them all in a function that returns a single char (or nothing)
 # * warn if we're going to overwrite an existing file when renaming temp output
 # * maybe an option to disable output creation and therefore restarting
 # * set margin/paper/plot-size -- can override limits derived from model (but without going beyond the model capabilities)
 #   adjusting for margin and previously set registration -- so the calcs done at plot time.  
 #   Tell user not to worry about AD's warning re part of image being off the edge
+# MAYBE
+# * delay between copies instead of waiting for user input
 
 import atexit
 from datetime import datetime
@@ -56,7 +53,7 @@ from pyaxidraw import axidraw
 from axicli    import utils as acutils
 
 # 'Constants'
-version = "0.2.0"   # interaxi version
+version = "0.2.1"   # interaxi version
 configDir = "~/.config/interaxi/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -93,6 +90,32 @@ regDistances = {"mm": {"f": 0.1  , "m": 1   , "c": 10  },
                 "in": {"f": 0.005, "m": 0.05, "c":  0.5}}
 noOutputFile = 'none'
 autoOutputFile = 'auto'
+# Options for AxiDraw (main and additional); others are for use here only
+mainOpts = [
+        "accel",
+        "auto_rotate",
+        "const_speed",
+        "digest",
+        "hiding",
+        "layer",
+        "model",
+        "pen_delay_down",
+        "pen_delay_up",
+        "pen_pos_down",
+        "pen_pos_up",
+        "pen_rate_lower",
+        "pen_rate_raise",
+        "random_start",
+        "rendering",
+        "reordering",
+        "report_time",
+        "speed_pendown",
+        "speed_penup",
+        ]
+addlOpts = [
+        "min_gap",
+        "report_lifts",
+        ]
 
 # Globals:
 aligned = False     # True if we know where the head is.
@@ -118,9 +141,9 @@ def maxY ():  # inches
 # Local store for options
 class Options:
     def __init__ (self):
-        # Hard-coded default options,
-        # just to make sure they all have values.
-        # Most will get updated from ad.options straight away.
+        # Hard-coded default options, just to make sure they all have values.
+        # i.e. minimum set of options that we assume are available.
+        # Most will get updated from ad.options and config file straight away.
         # Distances are in inches -- as per standard AxiDraw configs.
         # NOTE: Some options are specific to interaxi -- not standard AxiDraw ones.
         self.__dict__ = {
@@ -129,17 +152,11 @@ class Options:
             "const_speed": False,
             "copies": 1,
             "digest": 0,
-            "dist": 1.0,
             "hiding": False,
-            "ids": [],
             "layer": 1,
-            "manual_cmd": 'enable_xy',
             "margin": 0.4,      # distance; interaxi only
             "min_gap": 0.006,   # distance; additional
-            "mode": 'manual',
             "model": 1,
-            "no_rotate": False,
-            "page_delay": 15,
             "paper": 'A4L',     # interaxi only
             "pen_delay_down": 0,
             "pen_delay_up": 0,
@@ -148,24 +165,14 @@ class Options:
             "pen_rate_lower": 50,
             "pen_rate_raise": 75,
             "penlift": 1,
-            "port": None,
-            "port_config": 0,
-            "preview": False,
             "random_start": False,
-            "rendering": 3,
+            "rendering": 1,
             "reordering": 0,
             "report_time": True,
             "report_lifts": True,   # additional
-            "resolution": 1,
-            "resume_type": 'plot',
-            "selected_nodes": [],
-            "setup_type": 'align',
             "speed_pendown": 25,
             "speed_penup": 75,
-            "submode": 'none',
             "units": 'in',      # interaxi only
-            "webhook": False,
-            "webhook_url": None,
         }
         pass
     def __repr__ (self):
@@ -184,11 +191,12 @@ class Options:
     def setFromOptions (self, sourceDict):
         # set options from a dictionary
         for key, val in sourceDict.items():
-            self.__dict__[key] = val
-            #print(f"set {key}={val}")
+            if key in mainOpts:
+                self.__dict__[key] = val
+                #print(f"setFromOptions {key}={val}")
     def setFromParams (self, paramsDict):
         # 'additional' options from ad.params
-        for key in ['min_gap', 'report_lifts']:
+        for key in addlOpts:    #['min_gap', 'report_lifts']:
             self.__dict__[key] = paramsDict[key]
             #print(f"setFromParams {key}={paramsDict[key]}")
 options = Options()
@@ -215,12 +223,14 @@ help, \
 hiding <y/n>, \
 home|walk_home, \
 ls, \
+margin [<dist>], \
 min_gap [<dist>], \
 model [<num>], \
 off|disable_xy, \
 on|enable_xy, \
 options|config [<filename>], \
 output [<filename>], \
+paper [<papersize>], \
 plot <filename> [<layer>], \
 posdown|pen_pos_down <0-100>, \
 position, \
@@ -271,12 +281,14 @@ cmdList = [
     ("home", "wh"),
     ("lower_pen", "do"),
     ("ls", "ls"),
+    ("margin", "ma"),
     ("min_gap", "mg"),
     ("model", "mo"),
     ("off", "of"),
     ("on", "on"),
     ("options", "op"),
     ("output", "ou"),
+    ("paper", "pa"),
     ("page_delay", "dp"),
     ("pen_delay_down", "dd"),
     ("pen_delay_up", "du"),
