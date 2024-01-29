@@ -17,9 +17,17 @@
 #   - modules as below
 # * All distances are handled in inches, converting to and from millimetres
 #   for display and input if required.
+# * paper/margin settings -- started coding, but couldn't find a way to 
+#   tell AxiDraw to limit the plot range, so commented it all out.
+
+# FIXME
+# - no reports for plotFile
+# - doesn't go home after cancel -- even after typing 'home'
+# - align is broken -- doesn't turn motors off    nor does 'off'
 
 # TODO
-# * ignore/don't display unused options: dist, page_delay?, resume_type, selected_nodes, submode, webhook?
+# * 'replot' option -- uses most recent output, doesn't create new output
+# * get rid of report_time/_lifts from settable opts -- always set them to true when plotting a file, false for other plot_runs()
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
 #   - simplify model
@@ -53,7 +61,7 @@ from pyaxidraw import axidraw
 from axicli    import utils as acutils
 
 # 'Constants'
-version = "0.2.1"   # interaxi version
+version = "0.2.2"   # interaxi version
 configDir = "~/.config/interaxi/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -85,6 +93,10 @@ origDir = os.getcwd()
 # y_travel_V3B6 = 5.51     # AxiDraw V3/B6: Y             Default: 5.51 in (140 mm)
 xTravel = [None, 11.81, 16.93, 23.42, 6.30, 34.02, 23.39,  7.48]
 yTravel = [None,  8.58, 11.69,  8.58, 4.00, 23.39, 17.01,  5.51]
+## Paper sizes in inches
+#paperSizes = {"A4L": {"w": 297 / 25.4, "h": 210 / 25.4},
+#              "A4P": {"w": 210 / 25.4, "h": 297 / 25.4},
+#              "A3L": {"w": 420 / 25.4, "h": 297 / 25.4}}
 # Distances for registration moves -- sensible numbers in each set of units
 regDistances = {"mm": {"f": 0.1  , "m": 1   , "c": 10  },
                 "in": {"f": 0.005, "m": 0.05, "c":  0.5}}
@@ -116,7 +128,10 @@ addlOpts = [
         "min_gap",
         "report_lifts",
         ]
-
+distOpts = [
+        #"margin",
+        "min_gap",
+        ]
 # Globals:
 aligned = False     # True if we know where the head is.
 alignX = None       # Head position if aligned in inches.
@@ -154,10 +169,10 @@ class Options:
             "digest": 0,
             "hiding": False,
             "layer": 1,
-            "margin": 0.4,      # distance; interaxi only
+            #"margin": 0,      # distance; interaxi only
             "min_gap": 0.006,   # distance; additional
             "model": 1,
-            "paper": 'A4L',     # interaxi only
+            #"paper": 'A4L',     # interaxi only
             "pen_delay_down": 0,
             "pen_delay_up": 0,
             "pen_pos_down": 30,
@@ -183,7 +198,7 @@ class Options:
         keys.sort()
         for key in keys:
             val = self.__dict__[key]
-            if key in ['min_gap']:
+            if key in distOpts: 
                 # distances -- need to adjust for current units
                 val = fmtDist(val) + ' ' + options.units
             r += f"'{key}': {val}, "
@@ -223,14 +238,12 @@ help, \
 hiding <y/n>, \
 home|walk_home, \
 ls, \
-margin [<dist>], \
 min_gap [<dist>], \
 model [<num>], \
 off|disable_xy, \
 on|enable_xy, \
 options|config [<filename>], \
 output [<filename>], \
-paper [<papersize>], \
 plot <filename> [<layer>], \
 posdown|pen_pos_down <0-100>, \
 position, \
@@ -256,6 +269,8 @@ version, \
 walkx|x <distance>, \
 walky|y <distance> \
 """)
+#margin [<dist>], \
+#paper [<papersize>], \
     print("Commands can be abbreviated as long as what you type is unambiguous.")
 
 # List of commands with the associated short internal command name
@@ -281,14 +296,14 @@ cmdList = [
     ("home", "wh"),
     ("lower_pen", "do"),
     ("ls", "ls"),
-    ("margin", "ma"),
+    #("margin", "ma"),
     ("min_gap", "mg"),
     ("model", "mo"),
     ("off", "of"),
     ("on", "on"),
     ("options", "op"),
     ("output", "ou"),
-    ("paper", "pa"),
+    #("paper", "pa"),
     ("page_delay", "dp"),
     ("pen_delay_down", "dd"),
     ("pen_delay_up", "du"),
@@ -443,13 +458,18 @@ def plotRun (inputFn = None, outputFn = None):
     ad.plot_setup(inputFn)     # inputFn may be None
     # Apply all the options
     for key, value in options.__dict__.items():
-        if key in ['min_gap', 'report_lifts']:
+        if key in addlOpts: #['min_gap', 'report_lifts']:
             # 'additional' option -- see https://axidraw.com/doc/py_api/#additional-parameters
             ad.params.__dict__[key] = value
-        else:
+        elif key in mainOpts:
             # 'normal' option
             ad.options.__dict__[key] = value
     #print(f"Running with options {options}")
+
+    ## Apply paper/margin limits
+    #xLimit = paperSizes[options.paper]["w"] - options.margin
+    #yLimit = paperSizes[options.paper]["h"] - options.margin
+    #print(f"plotRun: {ad.bounds=}")
 
     if not outputFn:
         # not plotting a file
@@ -582,8 +602,37 @@ def setMinGap (args):
            print(err)
            return
         options.min_gap = dist
-    print(f"{fmtDist(options.min_gap)} {options.units}") 
+    print(f"min_gap {fmtDist(options.min_gap)} {options.units}") 
     return
+
+#def setMargin (args):
+#    if len(args) > 0:
+#        dist, err = getDist(args)
+#        if err:
+#           print(err)
+#           return
+#        options.margin = dist
+#    print(f"margin {fmtDist(options.margin)} {options.units}") 
+#    return
+
+#def setPaper (args):
+#    if len(args) == 0:
+#        print(f"paper {options.paper}")
+#        return
+#    if len(args) != 1:
+#        print(f"Need a paper size, not '{args}'")
+#        return
+#    p = args[0].upper()
+#    paper = None
+#    for s in paperSizes.keys():
+#        if s == p:
+#            paper = s
+#            break
+#    if paper:
+#        options.paper = paper
+#        print(f"paper {options.paper}")
+#    else:
+#        print(f"Paper size must be one of {list(paperSizes.keys())}, not '{p}'")
 
 # Allow fine tuning of position using arrow keys.
 def registerXY():
@@ -929,6 +978,7 @@ def initOptions ():
     # Setup options from AD's default config and our own config files
     ad = axidraw.AxiDraw()
     ad.plot_setup()                 # Go into plot mode and create ad.options
+    print(f"initOptions: {ad.bounds=}")
     # Copy initial ad.options into local options
     options.setFromParams(ad.params.__dict__)
     # User options override params:
@@ -1075,6 +1125,10 @@ def main():
             ls()
         elif shortCmd == "mg":
             setMinGap(args)
+        #elif shortCmd == "pa":
+        #    setPaper(args)
+        #elif shortCmd == "ma":
+        #    setMargin(args)
 
         else:
             print(f"Short command '{shortCmd}' ('{cmd}') is not known.")
