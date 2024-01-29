@@ -21,13 +21,10 @@
 #   tell AxiDraw to limit the plot range, so commented it all out.
 
 # FIXME
-# - no reports for plotFile
-# - doesn't go home after cancel -- even after typing 'home'
-# - align is broken -- doesn't turn motors off    nor does 'off'
+# * needs tidying
 
 # TODO
 # * 'replot' option -- uses most recent output, doesn't create new output
-# * get rid of report_time/_lifts from settable opts -- always set them to true when plotting a file, false for other plot_runs()
 # * "Command unavailable while in preview mode" -- if preview is True , some plot_run things won't work!!!!
 #    -- so, make preview an alternative command to plot.
 #   - simplify model
@@ -61,7 +58,7 @@ from pyaxidraw import axidraw
 from axicli    import utils as acutils
 
 # 'Constants'
-version = "0.2.2"   # interaxi version
+version = "0.2.3"   # interaxi version
 configDir = "~/.config/interaxi/"
 configFile = "axidraw_conf.py"
 defaultConfigFile = os.path.expanduser(os.path.join(configDir, configFile))
@@ -102,14 +99,15 @@ regDistances = {"mm": {"f": 0.1  , "m": 1   , "c": 10  },
                 "in": {"f": 0.005, "m": 0.05, "c":  0.5}}
 noOutputFile = 'none'
 autoOutputFile = 'auto'
-# Options for AxiDraw (main and additional); others are for use here only
-mainOpts = [
+userOpts = [     # Options the the user sees
         "accel",
         "auto_rotate",
         "const_speed",
+        "copies",
         "digest",
         "hiding",
         "layer",
+        "min_gap",
         "model",
         "pen_delay_down",
         "pen_delay_up",
@@ -120,15 +118,15 @@ mainOpts = [
         "random_start",
         "rendering",
         "reordering",
-        "report_time",
         "speed_pendown",
         "speed_penup",
+        "units",
         ]
-addlOpts = [
+addlOpts = [    # options that go in ad.params rather than ad.options
         "min_gap",
-        "report_lifts",
+        #"report_lifts",
         ]
-distOpts = [
+distOpts = [    # options that use a distance in mm or inches
         #"margin",
         "min_gap",
         ]
@@ -153,7 +151,7 @@ def maxY ():  # inches
         model = 1
     return yTravel[model]
 
-# Local store for options
+# Local store for options - just the ones that the user can set
 class Options:
     def __init__ (self):
         # Hard-coded default options, just to make sure they all have values.
@@ -179,12 +177,12 @@ class Options:
             "pen_pos_up": 60,
             "pen_rate_lower": 50,
             "pen_rate_raise": 75,
-            "penlift": 1,
+            #"penlift": 1,
             "random_start": False,
             "rendering": 1,
             "reordering": 0,
-            "report_time": True,
-            "report_lifts": True,   # additional
+            #"report_time": True,
+            #"report_lifts": True,   # additional
             "speed_pendown": 25,
             "speed_penup": 75,
             "units": 'in',      # interaxi only
@@ -206,12 +204,12 @@ class Options:
     def setFromOptions (self, sourceDict):
         # set options from a dictionary
         for key, val in sourceDict.items():
-            if key in mainOpts:
+            if key in userOpts:
                 self.__dict__[key] = val
                 #print(f"setFromOptions {key}={val}")
     def setFromParams (self, paramsDict):
         # 'additional' options from ad.params
-        for key in addlOpts:    #['min_gap', 'report_lifts']:
+        for key in addlOpts:
             self.__dict__[key] = paramsDict[key]
             #print(f"setFromParams {key}={paramsDict[key]}")
 options = Options()
@@ -271,6 +269,8 @@ walky|y <distance> \
 """)
 #margin [<dist>], \
 #paper [<papersize>], \
+#report_time <y/n>, \
+#report_lifts <y/n>, \
     print("Commands can be abbreviated as long as what you type is unambiguous.")
 
 # List of commands with the associated short internal command name
@@ -324,8 +324,8 @@ cmdList = [
     ("register", "rg"),
     ("rendering", "rn"),
     ("reordering", "ro"),
-    ("report_time", "rp"),
-    ("report_lifts", "rl"),
+    #("report_time", "rp"),
+    #("report_lifts", "rl"),
     ("save", "sc"),
     ("sethome", "sh"),
     ("speed_pendown", "sd"),
@@ -450,21 +450,38 @@ def handleSigint (*args):
         print("\ndone (Ctrl-C pressed)")
         quit()
 
+def applyOptionsToAD (ad, opts = {}):
+    #print(f"aOTAD: {opts=} {type(opts)}")
+    if type(opts) == type({}):
+        o = opts.items()
+    else:
+        o = opts.__dict__.items()
+    for key, value in o:    # pts.__dict__.items():
+        if key in addlOpts:
+            # 'additional' option -- see https://axidraw.com/doc/py_api/#additional-parameters
+            ad.params.__dict__[key] = value
+        else:
+            # 'normal' option
+            ad.options.__dict__[key] = value
+
 # Apply local options, and then call plot_run()
 # Returns 0 if OK, else an error code
-def plotRun (inputFn = None, outputFn = None):
+def plotRun (inputFn = None, outputFn = None, cmdOpts = {}):
 
     ad = axidraw.AxiDraw()
     ad.plot_setup(inputFn)     # inputFn may be None
-    # Apply all the options
-    for key, value in options.__dict__.items():
-        if key in addlOpts: #['min_gap', 'report_lifts']:
-            # 'additional' option -- see https://axidraw.com/doc/py_api/#additional-parameters
-            ad.params.__dict__[key] = value
-        elif key in mainOpts:
-            # 'normal' option
-            ad.options.__dict__[key] = value
-    #print(f"Running with options {options}")
+    # Apply all the user options
+    #for key, value in options.__dict__.items():
+    #    if key in addlOpts:
+    #        # 'additional' option -- see https://axidraw.com/doc/py_api/#additional-parameters
+    #        ad.params.__dict__[key] = value
+    #    elif key in mainOpts:
+    #        # 'normal' option
+    #        ad.options.__dict__[key] = value
+    applyOptionsToAD(ad, options)
+    # And then apply the command options
+    applyOptionsToAD(ad, cmdOpts)
+    #print(f"plotRun: {inputFn=}  {outputFn=}  {ad.options=}")
 
     ## Apply paper/margin limits
     #xLimit = paperSizes[options.paper]["w"] - options.margin
@@ -685,7 +702,7 @@ def registerXY():
             elif e in ('r', 'R'):
                 walkHome()
                 showMove("r")
-    printMsg("done registering")
+    printMsg("Done registering")
     reply = input("Set home? y/n: ")
     if getBool(False, reply):
         setHome()
@@ -703,7 +720,7 @@ def setUnits (args):
             options.units = 'in'
         else:
             print("need 'mm' or 'in'")
-    print("units ", options.units)
+    print("units", options.units)
 
 # Format a distance for printing in the current units
 def fmtDist (d):
@@ -720,8 +737,9 @@ def walk (xy, args):
         print(f"walk{xy}: {err}")
         return
     #print(f"walk{xy} {dist=} {aligned=} {alignX=} {alignY=} {maxX()=} {maxY()=}")
-    options.mode = "manual"
-    options.manual_cmd = f"walk_{xy}"
+    cmdOpts = {}
+    cmdOpts["mode"] = "manual"
+    cmdOpts["manual_cmd"] = f"walk_{xy}"
     if aligned: 
         limited = False
         if xy == 'x':
@@ -752,9 +770,9 @@ def walk (xy, args):
             if abs(dist) > maxY():
                 print("Too far")
                 return
-    options.walk_dist = dist     # for pre-3.8 software
-    options.dist = dist
-    rc = plotRun()
+    cmdOpts["walk_dist"] = dist     # for pre-3.8 software
+    cmdOpts["dist"] = dist
+    rc = plotRun(cmdOpts = cmdOpts)
     #print(f"NOT RUNNING -- would have walked {dist} {xy}")
 
 def walkHome ():
@@ -815,7 +833,7 @@ def plotCopies (args):
 # Plot or preview an SVG file, with loop to deal with pause/resume
 def plotFile (args, preview=False):
     cmdName = "preview" if preview else "plot"
-    participle = "previewing" if preview else "plotting"
+    participle = "Previewing" if preview else "Plotting"
     inputFilename, layer = getFilenameAndLayer(cmdName, args)
 
     global plotRunning
@@ -836,35 +854,38 @@ def plotFile (args, preview=False):
     plotCancelled = False
     while True:     # until completed or cancelled
         prevOutfn = outfn
+        cmdOpts = {}
         # Set up for the input file, and apply options
         if outfn != None:
             #print(f"Time to delete previous {outfn=} ?  NO!!!! outfn=infn")
             # Not the first time round the loop, so we're resuming
-            options.mode = "res_plot"
-            print(f"resuming file '{infn}' layer {layer}")
+            cmdOpts["mode"] = "res_plot"
+            print(f"Resuming file '{infn}' layer {layer}")
         elif layer is not None:
-            options.mode = "layers"
+            cmdOpts["mode"] = "layers"
             print(f"{participle} file '{infn}' layer {layer}")
         else:
-            options.mode = "plot"
+            cmdOpts["mode"] = "plot"
             print(f"{participle} file '{infn}'")
-        options.layer = layer   # even if it's None
+        cmdOpts["layer"] = layer   # even if it's None
         # now in plotRun   ad.plot_setup(infn)     # This changes ad.options
-        oldRT = options.report_time
-        oldRL = options.report_lifts
+        #oldRT = options.report_time
+        #oldRL = options.report_lifts
         if preview:
-            options.preview = True
-            # Always do these for previews
-            options.report_time = True
-            options.report_lifts = True
+            cmdOpts["preview"] = True
+        # Always do these
+        cmdOpts["report_time"] = True
+        cmdOpts["report_lifts"] = True
         # Always send output to temp file (see below re saving it)
         ofh, outfn = tempfile.mkstemp(suffix='.svg', text=True)
         # ?? ofh.close() # just need the name
-        rc = plotRun(infn, outfn)   # This re-applies local options to ad.options
-        if preview:
-            options.preview = False
-            options.report_time = oldRT
-            options.report_lifts = oldRL
+        rc = plotRun(infn, outfn, cmdOpts)
+        #if preview:
+        #    options.preview = False
+        #options.report_time = False
+        #options.report_lifts = False
+        #del options.report_time
+        #del options.report_lifts
         if infn != inputFilename:
             # input was a temporary file -- delete it
             pathlib.Path(infn).unlink(missing_ok = True)
@@ -910,9 +931,13 @@ def plotFile (args, preview=False):
 
 # simple manual commands
 def manual (cmd):
-    options.mode = "manual"
-    options.manual_cmd = cmd
-    rc = plotRun()
+    #options.mode = "manual"
+    #options.manual_cmd = cmd
+    rc = plotRun(cmdOpts = {"mode": "manual", "manual_cmd": cmd})
+
+# Other special mode runs
+def runMode (m): 
+    rc = plotRun(cmdOpts = {"mode": m})
 
 def setModel(args):
     setRangeInt("model", 1, 7, args)
@@ -920,8 +945,8 @@ def setModel(args):
 
 def align (showMsg = True):
     global aligned, alignX, alignY
-    options.mode = "align"
-    rc = plotRun()
+    #options.mode = "align"
+    rc = plotRun(cmdOpts = {"mode": "align"})
     if showMsg:     # Don't show msg if running via the 'on' command
         print("Head can now be moved manually.")
     reply = input("Is the head at the origin (0,0)? y/n: ")
@@ -1028,19 +1053,23 @@ def main():
             print("done")
             break   # out of the while loop
         elif shortCmd == "cy":
-            options.mode = "cycle"
-            rc = plotRun()
+            #options.mode = "cycle"
+            #rc = plotRun()
+            runMode("cycle")
         elif shortCmd == "al":
             align()
         elif shortCmd == "vr":
-            options.mode = "version"
-            rc = plotRun()
+            #options.mode = "version"
+            #rc = plotRun()
+            runMode("version")
         elif shortCmd == "sy":
-            options.mode = "sysinfo"
-            rc = plotRun()
+            #options.mode = "sysinfo"
+            #rc = plotRun()
+            runMode("sysinfo")
         elif shortCmd == "tg":
-            options.mode = "toggle"
-            rc = plotRun()
+            #options.mode = "toggle"
+            #rc = plotRun()
+            runMode("toggle")
         elif shortCmd == "un":
             setUnits(args)
         elif shortCmd == "wx":
@@ -1103,10 +1132,10 @@ def main():
             setRangeInt("copies", 0, 9999, args)
         elif shortCmd == "rd":
             setBool("random_start", args)
-        elif shortCmd == "rp":
-            setBool("report_time", args)
-        elif shortCmd == "rl":
-            setBool("report_lifts", args)
+        #elif shortCmd == "rp":
+        #    setBool("report_time", args)
+        #elif shortCmd == "rl":
+        #    setBool("report_lifts", args)
         elif shortCmd == "cs":
             setBool("const_speed", args)
         elif shortCmd == "au":
